@@ -28,7 +28,12 @@ export const SCHEMA = {
     sponges: { type: "integer", description: "Final counted sponges, -1 if not said." },
     needles: { type: "integer", description: "Final counted needles, -1 if not said." },
     milestone: { type: "string", enum: ["incision", "closure", "none"] },
-    imaging: { type: "string", enum: ["show", "hide", "next", "previous", "zoom_in", "zoom_out", "rotate", "none"] },
+    imaging: {
+      type: "string",
+      enum: ["show", "hide", "next", "previous", "goto", "scroll_down", "scroll_up", "zoom_in", "zoom_out", "pan_left", "pan_right", "pan_up",
+        "pan_down", "rotate", "reset", "window_soft", "window_bone", "window_wide", "view_axial", "view_coronal", "view_sagittal", "play", "stop",
+        "landmark", "none"],
+    },
   },
 } as const;
 
@@ -41,7 +46,10 @@ Return the single best intent. Rules:
 - open_items: sponges/lap pads -> item "sponge"; loose needles -> "needle"; a suture like "4-0 Prolene" -> item "suture" with detail; an implant/graft/mesh/plate/screw -> item "implant" with detail.
 - final_count: the team states the final count of sponges and/or needles.
 - milestone: incision or closure being called.
-- imaging: showing/hiding/scrolling/zooming/rotating the pre-op images.
+- imaging: driving the CT viewer. goto: a slice number in "quantity". scroll_down/scroll_up: how many slices in "quantity" (0 if not said).
+  landmark: going to a body part on the scan (hip, groin, thigh, knee, calf, ankle, foot) with the body part in "detail".
+  window_bone / window_soft / window_wide: display window. view_axial / view_coronal (front view) / view_sagittal (side view).
+  play: scroll through the scan automatically; stop: stop there. pan_*: move the view; reset: back to the default view.
 - call_specialist: put the medical specialty into "specialty", normalising informal words ("the bone doctor" -> "orthopedics",
   "the anaesthetist" -> "anesthesia", "the vessel surgeon" -> "vascular"); if a doctor is named instead, copy the name.
 - lookup: a question asking to hear something already in the case record (allergies, ordered medications or a drug's ordered dose

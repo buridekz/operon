@@ -5,6 +5,7 @@
 // The LLM may only produce an Intent. Every spoken reply is a template in this file, and
 // confirmations / checklist answers are never interpreted by a model.
 import { matchDrug, allergyConflict } from "./formulary.js";
+import { ctCommand, currentSlice, newImaging, LANDMARK_RE, PLAY_MS, type CtAction, type Imaging } from "./ct.js";
 import { findMedMention, fmtDose, parseDose, parseOrders, sameDose, unknownDrugWord, type Dose, type Order } from "./meds.js";
 
 export type ChecklistName = "signin" | "timeout" | "signout";
@@ -71,7 +72,6 @@ function findOnCall(state: State, heard: string): OnCall | null {
 export const MILESTONES = { incision: "Incision", closure: "Closure" } as const;
 export type Milestone = keyof typeof MILESTONES;
 export type CountItem = "sponge" | "needle";
-export const CT_SLICES = 40;
 
 /** The only thing the LLM is allowed to produce. Flat, with "none"/""/-1 defaults, for strict JSON schemas. */
 export type Intent = {
@@ -98,7 +98,8 @@ export type Intent = {
   sponges: number;
   needles: number;
   milestone: Milestone | "none";
-  imaging: "show" | "hide" | "next" | "previous" | "zoom_in" | "zoom_out" | "rotate" | "none";
+  /** imaging: what to do with the CT. A slice number or scroll amount goes in "quantity", a landmark in "detail". */
+  imaging: CtAction;
 };
 
 export const EMPTY_INTENT: Intent = {
@@ -143,8 +144,10 @@ export type State = {
   finalCount: Record<CountItem, number> | null;
   implants: { time: string; name: string }[];
   milestones: Partial<Record<Milestone, number>>;
-  imaging: { visible: boolean; study: string; slice: number; zoom: number; rotation: number } | null;
+  imaging: Imaging | null;
   signedAt: number | null;
+  /** Not listening: the team is talking about Vega (a briefing, a demo), not to it. Alarms still sound. */
+  paused: boolean;
 };
 
 export type Opts = { minuteMs: number; alertMinutes?: number[] };
@@ -160,6 +163,8 @@ const YES = /\b(confirm(ed)?|yes|yep|correct|complete(d)?|done|affirmative|marke
 const CONFIRM = /\b(confirm(ed)?|yes|correct|affirmative)\b/i;
 const NO = /\b(cancel|no,? wait|wrong|correction|negative|scratch that)\b/i;
 const QUESTION = /^(what|whats|what's|which|how many|how much|when|who|tell me|remind me|read( me)? back|any|is there|are there|do we have|list|check)\b|\?$/i;
+const PAUSE = /\b(pause|stop|mute)\s+(listening|yourself|the mic)\b|\bgo (to )?sleep\b|\bstand ?by\b|^mute\b|^pause$/i;
+const RESUME = /\b(resume|wake up|start listening|unmute|i'?m back|back on|listen up)\b|^listen\b/i;
 const SKIP = /\b(skip|let'?s (just )?start|move on|later|no time|we'?re late|go ahead without)\b/i;
 export const SAY_AGAIN = "Sorry, say that again.";
 
@@ -206,6 +211,7 @@ export function createState(setup: CaseSetup = {}): State {
     milestones: {},
     imaging: null,
     signedAt: null,
+    paused: false,
   };
 }
 
@@ -308,14 +314,31 @@ export function ruleIntent(body: string): Intent | null {
   if (/\btime[\s-]?out\b/.test(t)) return I({ intent: "start_checklist", checklist: "timeout" });
   if (/\bsign[\s-]?out\b/.test(t)) return I({ intent: "start_checklist", checklist: "signout" });
 
-  // Imaging (display only): needs an imaging word, so "open 3 sponges" is never read as imaging.
-  if (/\b(hide|close|clear)\b.*\b(ct|scan|images?|imaging)\b/.test(t)) return I({ intent: "imaging", imaging: "hide" });
-  if (/\b(show|display|pull up|bring up|open)\b.*\b(ct|scan|images?|imaging)\b/.test(t)) return I({ intent: "imaging", imaging: "show" });
-  if (/\bnext (slice|image)\b|\bscroll down\b/.test(t)) return I({ intent: "imaging", imaging: "next" });
-  if (/\b(previous|last|back one) (slice|image)\b|\bscroll up\b/.test(t)) return I({ intent: "imaging", imaging: "previous" });
-  if (/\bzoom in\b|\benlarge\b/.test(t)) return I({ intent: "imaging", imaging: "zoom_in" });
-  if (/\bzoom out\b/.test(t)) return I({ intent: "imaging", imaging: "zoom_out" });
-  if (/\brotate\b/.test(t)) return I({ intent: "imaging", imaging: "rotate" });
+  // Imaging (display only): needs an imaging word or a CT-only phrase, so "open 3 sponges" is never read as imaging.
+  const ct = (imaging: CtAction, p: Partial<Intent> = {}) => I({ intent: "imaging", imaging, ...p });
+  if (/\b(hide|close|clear|dismiss)\b.*\b(ct|scan|images?|imaging)\b/.test(t)) return ct("hide");
+  if ((m = t.match(new RegExp(`\\b(?:go to|jump to|show(?: me)?|take me to|bring up)\\s+(?:the\\s+)?(?:slice\\s+(?:at|for)\\s+the\\s+)?${LANDMARK_RE.source}`)))) return ct("landmark", { detail: m[1] });
+  if ((m = t.match(/\b(?:go to|jump to|show(?: me)?)?\s*slice\s+(?:number\s+)?(\d+)\b/))) return ct("goto", { quantity: Number(m[1]) });
+  if ((m = t.match(new RegExp(`\\b(?:scroll|go|move|skip)\\s+(down|forward|ahead|up|back)\\s+${NUM}\\b|\\b(next|back|previous)\\s+${NUM}\\s+(?:slices|images)\\b`)))) {
+    const down = /down|forward|ahead|next/.test(m[1] ?? m[3]);
+    return ct(down ? "scroll_down" : "scroll_up", { quantity: num(m[2] ?? m[4]) });
+  }
+  if (/\b(show|display|pull up|bring up|open)\b.*\b(ct|scan|images?|imaging)\b/.test(t)) return ct("show");
+  if (/\bnext (slice|image)\b|\bscroll down\b/.test(t)) return ct("next");
+  if (/\b(previous|last|back one) (slice|image)\b|\bscroll up\b/.test(t)) return ct("previous");
+  if (/\bzoom in\b|\benlarge\b|\bcloser\b|\bmagnify\b/.test(t)) return ct("zoom_in");
+  if (/\bzoom out\b/.test(t)) return ct("zoom_out");
+  if ((m = t.match(/\b(?:pan|move|shift|slide)\s+(?:the\s+(?:image|view)\s+)?(left|right|up|down)\b/))) return ct(`pan_${m[1]}` as CtAction);
+  if (/\breset (the )?(view|image|zoom)\b|\bfit (it )?(to )?(the )?(screen|window)\b/.test(t)) return ct("reset");
+  if (/\bbone window\b|\bbone setting\b|\bshow (me )?the bones?\b/.test(t)) return ct("window_bone");
+  if (/\bsoft[- ]tissue\b|\bmuscle window\b/.test(t)) return ct("window_soft");
+  if (/\b(wide|full|lung) window\b/.test(t)) return ct("window_wide");
+  if (/\bcoronal\b|\bfront view\b|\bfrom the front\b|\bwhole leg\b/.test(t)) return ct("view_coronal");
+  if (/\bsagittal\b|\bside view\b|\bfrom the side\b/.test(t)) return ct("view_sagittal");
+  if (/\baxial\b|\bcross[- ]section\b/.test(t)) return ct("view_axial");
+  if (/\b(play|cine|loop)\b|\b(scroll|run|go|flip) through\b/.test(t)) return ct("play");
+  if (/^(stop|pause|freeze|hold it|hold there)\b|\bstop (the )?(scan|scrolling|playing|images?|ct)\b/.test(t)) return ct("stop");
+  if (/\brotate\b/.test(t)) return ct("rotate");
 
   if (/tourniquet/.test(t) && /\b(how long|minutes|time)\b/.test(t) && (QUESTION.test(t) || !/\b(on|off)\b/.test(t))) return I({ intent: "tourniquet_time" });
   m = t.match(/tourniquet\s+(on|off)(?:[,\s]+(?:the\s+)?(left|right)\s+(thigh|arm|leg|forearm|calf))?/);
@@ -410,18 +433,9 @@ export function applyScreen(state: State, drug: string, allergy: string, now: nu
   return `Please verify: ${cap(drug)} may conflict with the recorded ${allergy} allergy.`;
 }
 
-function imaging(state: State, action: Intent["imaging"]): string {
-  const img = (state.imaging ??= { visible: false, study: "Pre-op CT · lower limb angiogram", slice: 18, zoom: 1, rotation: 0 });
-  switch (action) {
-    case "show": img.visible = true; return "Showing the pre-op CT.";
-    case "hide": img.visible = false; return "Images closed.";
-    case "next": img.visible = true; img.slice = Math.min(CT_SLICES, img.slice + 1); return `Slice ${img.slice}.`;
-    case "previous": img.visible = true; img.slice = Math.max(1, img.slice - 1); return `Slice ${img.slice}.`;
-    case "zoom_in": img.visible = true; img.zoom = Math.min(3, img.zoom + 0.5); return `Zoom ${img.zoom} times.`;
-    case "zoom_out": img.visible = true; img.zoom = Math.max(1, img.zoom - 0.5); return `Zoom ${img.zoom} times.`;
-    case "rotate": img.visible = true; img.rotation = (img.rotation + 90) % 360; return `Rotated to ${img.rotation} degrees.`;
-    default: return SAY_AGAIN;
-  }
+function imaging(state: State, intent: Intent, now: number): string {
+  const img = (state.imaging ??= newImaging());
+  return ctCommand(img, intent.imaging, now, intent.quantity, intent.detail);
 }
 
 /** Execute a parsed intent. All replies are templates; nothing here comes from a model. */
@@ -482,7 +496,7 @@ export function applyIntent(state: State, intent: Intent, now: number, opts: Opt
     }
 
     case "imaging":
-      return imaging(state, intent.imaging);
+      return imaging(state, intent, now);
 
     case "antibiotic_time": {
       const ab = state.case.antibioticGiven ?? lastDrug(state);
@@ -625,6 +639,16 @@ export function handle(state: State, text: string, now: number, opts: Opts): Tur
   const woke = WAKE.test(heard);
   const body = heard.replace(WAKE, "").replace(/^[\s,.:;-]+/, "").replace(/^(hey|ok|okay)[\s,]+/i, "");
 
+  // Paused: everything is ignored except "Vega, resume".
+  if (state.paused) {
+    if (woke && RESUME.test(body)) { state.paused = false; return "Listening."; }
+    return null;
+  }
+  if (woke && PAUSE.test(body)) {
+    state.paused = true;
+    return "Paused. Say Vega, resume, when you need me.";
+  }
+
   // The team talking to each other, not to Vega: it stays out of it unless a medication that was
   // named conflicts with the case record (an allergy, or a dose that differs from the order).
   if (!woke) {
@@ -728,6 +752,7 @@ export function view(state: State, now: number, opts: Opts) {
   const r = reconcile(state);
   return {
     phase: state.phase,
+    paused: state.paused,
     case: { ...state.case, orders: state.case.orders.map((o) => `${cap(o.drug)}${o.dose ? ` ${fmtDose(o.dose)}` : ""}`) },
     checklists,
     pending: state.pending,
@@ -745,7 +770,12 @@ export function view(state: State, now: number, opts: Opts) {
     },
     implants: state.implants,
     milestones: Object.fromEntries(Object.entries(state.milestones).map(([k, v]) => [k, clock(v!)])),
-    imaging: state.imaging,
+    // While playing, the board keeps the scan moving on its own clock from this snapshot.
+    imaging: state.imaging && {
+      ...state.imaging,
+      slice: currentSlice(state.imaging, now),
+      playing: state.imaging.playing ? { everyMs: PLAY_MS } : null,
+    },
     record: {
       title: "Operative record · draft",
       patient: state.case.patient,

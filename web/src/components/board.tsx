@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle2, OctagonAlert, PhoneCall, Volume2, VolumeX } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CtViewer } from "@/components/ct-viewer";
+import { CtViewer, loadCt } from "@/components/ct-viewer";
 import { Logo, VegaRing } from "@/components/vega-ring";
 import { cn } from "@/lib/utils";
 import { mmss, pad2, type ChecklistView, type EngineView, type Severity } from "@/lib/engine";
@@ -259,8 +259,8 @@ function Hero({ v }: { v: EngineView }) {
     return (
       <Card className="h-full">
         <CardContent className="mx-auto w-full max-w-[min(100%,72vh)]">
-          <CtViewer study={v.imaging.study} slice={v.imaging.slice} zoom={v.imaging.zoom} rotation={v.imaging.rotation} />
-          <p className="mt-3 text-center text-sm text-muted-foreground">&ldquo;Vega, next slice · zoom in · rotate · close the images&rdquo;</p>
+          <CtViewer imaging={v.imaging} />
+          <p className="mt-3 text-center text-sm text-muted-foreground">&ldquo;Vega, go to the knee · bone window · coronal view · play through · zoom in&rdquo;</p>
         </CardContent>
       </Card>
     );
@@ -301,6 +301,7 @@ export function Board() {
   const [audio, setAudio] = useState<AudioContext | null>(null);
   useEarcons(v, audio);
   const vs = vegaState(v, now);
+  useEffect(() => { void loadCt().catch(() => {}); }, []); // fetch the CT in the background so it shows instantly
 
   if (!v) {
     return <main className="grid flex-1 place-items-center text-muted-foreground">Connecting to the Operon engine…</main>;
@@ -320,9 +321,9 @@ export function Board() {
         <div className="flex flex-wrap items-center gap-5">
           <PhaseStepper v={v} />
           <div className="flex items-center gap-2.5">
-            <VegaRing state={vs} ticks={phaseTicks(v)} size={46} />
-            <span className={cn("w-20 font-mono text-xs font-semibold uppercase tracking-[0.08em]", vs === "off" ? "text-muted-foreground" : vs === "warning" ? "text-amber" : vs === "critical" ? "text-critical" : "text-teal")}>
-              {vs === "off" ? "Vega off" : vs === "listening" ? "Listening" : vs === "speaking" ? "Speaking" : vs === "warning" ? "Warning" : "Critical"}
+            <VegaRing state={v.paused ? "off" : vs} ticks={phaseTicks(v)} size={46} />
+            <span className={cn("w-20 font-mono text-xs font-semibold uppercase tracking-[0.08em]", v.paused || vs === "off" ? "text-muted-foreground" : vs === "warning" ? "text-amber" : vs === "critical" ? "text-critical" : "text-teal")}>
+              {v.paused ? "Paused" : vs === "off" ? "Vega off" : vs === "listening" ? "Listening" : vs === "speaking" ? "Speaking" : vs === "warning" ? "Warning" : "Critical"}
             </span>
           </div>
           <span className="font-mono text-4xl font-semibold tabular-nums">{d ? `${pad2(d.getHours())}:${pad2(d.getMinutes())}` : "--:--"}</span>

@@ -197,7 +197,7 @@ describe("lookups, timers and consults", () => {
   test("a ringing call doesn't mute Vega, and the phone can decline or hang up", () => {
     const s = createState();
     handle(s, "Vega, call vascular", T0, opts);
-    expect(handle(s, "Vega, show the CT", T0, opts)).toBe("Showing the pre-op CT.");
+    expect(handle(s, "Vega, show the CT", T0, opts)).toBe("Showing the CT.");
     expect(endConsult(s, T0, "specialist")).toBe("Dr. Valdez declined the call.");
     expect(endConsult(s, T0, "specialist")).toBeNull();
     handle(s, "Vega, call vascular", T0 + MIN, opts);
@@ -265,9 +265,10 @@ describe("milestones and imaging", () => {
 
   test("imaging commands drive the viewer without confirmation (display only)", () => {
     const s = createState();
-    expect(handle(s, "Vega, show the pre-op CT", T0, opts)).toBe("Showing the pre-op CT.");
-    expect(s.imaging).toMatchObject({ visible: true, slice: 18 });
-    expect(handle(s, "Vega, next slice", T0, opts)).toBe("Slice 19.");
+    expect(handle(s, "Vega, show the pre-op CT", T0, opts)).toBe("Showing the CT.");
+    expect(s.imaging).toMatchObject({ visible: true, view: "axial" });
+    const at = s.imaging!.slice;
+    expect(handle(s, "Vega, next slice", T0, opts)).toBe(`Slice ${at + 1} of 267.`);
     expect(handle(s, "Vega, zoom in", T0, opts)).toBe("Zoom 1.5 times.");
     expect(handle(s, "Vega, rotate", T0, opts)).toBe("Rotated to 90 degrees.");
     expect(handle(s, "Vega, close the images", T0, opts)).toBe("Images closed.");

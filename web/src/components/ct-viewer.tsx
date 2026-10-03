@@ -1,69 +1,162 @@
-// Simulated CT viewer for the voice-driven imaging demo. The image is generated procedurally
-// (an axial thigh cross-section), so there is no patient data and no licensing concern.
-// It is always labelled SIMULATED.
+"use client";
 
-const TOTAL = 40;
+// CT viewer for the wall board, driven by voice through the engine. The study is a real,
+// de-identified CT of the legs from The Cancer Imaging Archive (Soft-tissue-Sarcoma, CC BY 3.0),
+// shown as a sample study: it is not this patient's scan, and the label says so.
+// The volume (public/ct) is one byte per voxel, packed from Hounsfield units by scripts/build-ct.py,
+// so it can be re-windowed here.
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { EngineView } from "@/lib/engine";
 
-type Props = { study: string; slice: number; zoom: number; rotation: number; className?: string };
+type Imaging = NonNullable<EngineView["imaging"]>;
+type Meta = {
+  slices: number; rows: number; cols: number; spacing: { x: number; y: number; z: number };
+  encoding: [number, number, number, number][]; source: string; doi: string;
+};
+type Volume = { meta: Meta; data: Uint8Array };
 
-export function CtViewer({ study, slice, zoom, rotation, className }: Props) {
-  // The thigh tapers and the vessels drift slightly from proximal (1) to distal (40).
-  const k = (slice - 1) / (TOTAL - 1);
-  const rx = 205 - 40 * k;
-  const ry = 175 - 30 * k;
-  const femurX = 6 - 10 * k;
-  const femurR = 30 - 3 * k;
-  const arteryX = -38 + 30 * k;
-  const arteryY = -62 + 40 * k;
-  const seed = slice * 7;
+let loading: Promise<Volume> | null = null;
+/** Fetch and unpack the volume once per page; call early so "show the CT" is instant. */
+export function loadCt(): Promise<Volume> {
+  loading ??= (async () => {
+    const [meta, buf] = await Promise.all([
+      fetch("/ct/meta.json").then((r) => r.json() as Promise<Meta>),
+      fetch("/ct/volume.bin.gz").then((r) => r.arrayBuffer()),
+    ]);
+    let bytes = new Uint8Array(buf);
+    if (bytes[0] === 0x1f && bytes[1] === 0x8b) { // still gzipped (the server didn't decode it for us)
+      const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
+      bytes = new Uint8Array(await new Response(stream).arrayBuffer());
+    }
+    return { meta, data: bytes };
+  })().catch((e) => { loading = null; throw e; });
+  return loading;
+}
+
+const WINDOWS = { soft: { w: 400, l: 40, label: "Soft tissue" }, bone: { w: 1800, l: 400, label: "Bone" }, wide: { w: 2000, l: 0, label: "Wide" } };
+
+/** byte -> grey for a window, through the HU packing in meta.encoding. */
+function lut(meta: Meta, win: keyof typeof WINDOWS): Uint8ClampedArray {
+  const { w, l } = WINDOWS[win];
+  const out = new Uint8ClampedArray(256);
+  for (let b = 0; b < 256; b++) {
+    const seg = meta.encoding.find(([, , b0, b1]) => b >= b0 && b <= b1) ?? meta.encoding[meta.encoding.length - 1];
+    const [h0, h1, b0, b1] = seg;
+    const hu = h0 + ((b - b0) * (h1 - h0)) / (b1 - b0 || 1);
+    out[b] = ((hu - (l - w / 2)) / w) * 255;
+  }
+  return out;
+}
+
+/** One plane of the volume as width x height bytes, plus its physical aspect ratio. */
+function plane(v: Volume, view: Imaging["view"], index: number) {
+  const { slices: S, rows: R, cols: C, spacing } = v.meta;
+  const d = v.data;
+  if (view === "axial") {
+    const k = Math.min(S, Math.max(1, index)) - 1;
+    return { w: C, h: R, aspect: (C * spacing.x) / (R * spacing.y), px: d.subarray(k * R * C, (k + 1) * R * C) };
+  }
+  const px = new Uint8Array((view === "coronal" ? C : R) * S);
+  if (view === "coronal") { // a front view: fixed depth (row), patient's right on the left
+    const r = Math.min(R, Math.max(1, index)) - 1;
+    for (let s = 0; s < S; s++) px.set(d.subarray(s * R * C + r * C, s * R * C + r * C + C), s * C);
+    return { w: C, h: S, aspect: (C * spacing.x) / (S * spacing.z), px };
+  }
+  const c = Math.min(C, Math.max(1, index)) - 1; // sagittal: fixed column, front on the left
+  for (let s = 0; s < S; s++) for (let r = 0; r < R; r++) px[s * R + r] = d[s * R * C + r * C + c];
+  return { w: R, h: S, aspect: (R * spacing.y) / (S * spacing.z), px };
+}
+
+const MARKERS = {
+  axial: { left: "R", right: "L", top: "A", bottom: "P" },
+  coronal: { left: "R", right: "L", top: "S", bottom: "I" },
+  sagittal: { left: "A", right: "P", top: "S", bottom: "I" },
+};
+const VIEW_LABEL = { axial: "Axial", coronal: "Coronal", sagittal: "Sagittal" };
+
+export function CtViewer({ imaging, className }: { imaging: Imaging; className?: string }) {
+  const [vol, setVol] = useState<Volume | null>(null);
+  const [failed, setFailed] = useState(false);
+  const canvas = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    let live = true;
+    loadCt().then((v) => live && setVol(v), () => live && setFailed(true));
+    return () => { live = false; };
+  }, []);
+
+  const total = vol ? (imaging.view === "axial" ? vol.meta.slices : imaging.view === "coronal" ? vol.meta.rows : vol.meta.cols) : 0;
+
+  // "Play through the scan": the engine says it's playing; the board moves on its own clock,
+  // counting from the snapshot that started it (keyed so a new snapshot starts the count over).
+  const playKey = imaging.playing ? `${imaging.view}:${imaging.slice}` : null;
+  const [played, setPlayed] = useState<{ key: string; n: number } | null>(null);
+  useEffect(() => {
+    if (!playKey || !imaging.playing) return;
+    const start = performance.now();
+    const every = imaging.playing.everyMs;
+    const id = setInterval(() => setPlayed({ key: playKey, n: Math.floor((performance.now() - start) / every) }), every);
+    return () => clearInterval(id);
+  }, [playKey, imaging.playing]);
+  const step = played && played.key === playKey ? played.n : 0;
+  const shown = total && playKey ? ((imaging.slice - 1 + step) % total) + 1 : imaging.slice;
+
+  const grey = useMemo(() => (vol ? lut(vol.meta, imaging.window) : null), [vol, imaging.window]);
+  const img = useMemo(() => (vol ? plane(vol, imaging.view, shown) : null), [vol, imaging.view, shown]);
+
+  useEffect(() => {
+    const cv = canvas.current;
+    if (!cv || !img || !grey) return;
+    cv.width = img.w;
+    cv.height = img.h;
+    const ctx = cv.getContext("2d");
+    if (!ctx) return;
+    const out = ctx.createImageData(img.w, img.h);
+    for (let i = 0, j = 0; i < img.px.length; i++, j += 4) {
+      const g = grey[img.px[i]];
+      out.data[j] = g; out.data[j + 1] = g; out.data[j + 2] = g; out.data[j + 3] = 255;
+    }
+    ctx.putImageData(out, 0, 0);
+  }, [img, grey]);
+
+  const win = WINDOWS[imaging.window];
+  const mk = MARKERS[imaging.view];
+  const tall = img ? img.aspect < 1 : false;
 
   return (
-    <figure className={className} aria-label={`${study}, slice ${slice} of ${TOTAL}, simulated`}>
+    <figure className={className} aria-label={`CT, ${VIEW_LABEL[imaging.view]} ${shown} of ${total || "?"}, sample study`}>
       <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-black">
-        <svg viewBox="-260 -260 520 520" className="absolute inset-0 size-full" role="img" aria-hidden>
-          <defs>
-            <filter id="ct-grain" x="-50%" y="-50%" width="200%" height="200%">
-              <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed={seed} result="n" />
-              <feColorMatrix in="n" type="matrix" values="0 0 0 0 0.5  0 0 0 0 0.5  0 0 0 0 0.5  0 0 0 0.35 0" result="g" />
-              <feComposite in="g" in2="SourceGraphic" operator="in" result="gm" />
-              <feBlend in="SourceGraphic" in2="gm" mode="overlay" />
-            </filter>
-            <radialGradient id="ct-marrow">
-              <stop offset="0" stopColor="#6f6f6f" />
-              <stop offset="1" stopColor="#4a4a4a" />
-            </radialGradient>
-          </defs>
-          <g transform={`rotate(${rotation}) scale(${zoom})`} filter="url(#ct-grain)">
-            {/* skin + subcutaneous fat */}
-            <ellipse rx={rx} ry={ry} fill="#2c2c2c" stroke="#7a7a7a" strokeWidth="2" />
-            {/* muscle compartments */}
-            <ellipse cx={-10} cy={-30} rx={rx * 0.78} ry={ry * 0.45} fill="#8a8a8a" />
-            <ellipse cx={35} cy={60} rx={rx * 0.6} ry={ry * 0.42} fill="#7f7f7f" />
-            <ellipse cx={-85} cy={45} rx={rx * 0.32} ry={ry * 0.38} fill="#848484" />
-            <path d={`M ${-rx * 0.7} 10 Q 0 ${-10 + 8 * k} ${rx * 0.75} 20`} stroke="#3a3a3a" strokeWidth="5" fill="none" />
-            <path d={`M -20 ${-ry * 0.7} Q 10 0 -5 ${ry * 0.75}`} stroke="#3a3a3a" strokeWidth="4" fill="none" />
-            {/* femur: cortex + marrow */}
-            <circle cx={femurX} cy={8} r={femurR} fill="#f2f2f2" />
-            <circle cx={femurX} cy={8} r={femurR * 0.62} fill="url(#ct-marrow)" />
-            {/* femoral artery (contrast-filled) and vein */}
-            <circle cx={arteryX} cy={arteryY} r={10} fill="#ffffff" />
-            <circle cx={arteryX + 22} cy={arteryY + 6} r={12} fill="#b5b5b5" />
-          </g>
-        </svg>
+        <div className="absolute inset-0 grid place-items-center p-6">
+          {img ? (
+            <canvas
+              ref={canvas}
+              className="max-h-full max-w-full transition-transform duration-300 ease-out"
+              style={{
+                aspectRatio: img.aspect,
+                ...(tall ? { height: "100%", width: "auto" } : { width: "100%", height: "auto" }),
+                transform: `translate(${imaging.panX * 100}%, ${imaging.panY * 100}%) scale(${imaging.zoom}) rotate(${imaging.rotation}deg)`,
+              }}
+            />
+          ) : (
+            <p className="font-mono text-sm text-white/60">{failed ? "CT couldn't load." : "Loading CT…"}</p>
+          )}
+        </div>
 
-        {/* CT overlay text */}
         <div className="pointer-events-none absolute inset-0 p-3 font-mono text-[11px] leading-tight text-white/75 sm:text-xs">
           <div className="absolute left-3 top-3">
-            <p>{study}</p>
-            <p>Axial · slice {slice}/{TOTAL}</p>
+            <p>{VIEW_LABEL[imaging.view]} · {imaging.view === "axial" ? "slice" : "plane"} {shown}/{total || "…"}</p>
+            {imaging.playing && <p className="text-teal">▶ playing</p>}
           </div>
           <div className="absolute right-3 top-3 text-right">
-            <p>W 400 L 40</p>
-            <p>Zoom {zoom.toFixed(1)}× · {rotation}°</p>
+            <p>{win.label} · W {win.w} L {win.l}</p>
+            <p>Zoom {imaging.zoom.toFixed(1)}×{imaging.rotation ? ` · ${imaging.rotation}°` : ""}</p>
           </div>
-          <p className="absolute left-3 top-1/2 -translate-y-1/2">R</p>
-          <p className="absolute right-3 top-1/2 -translate-y-1/2">L</p>
-          <p className="absolute bottom-3 left-3 rounded bg-black/60 px-1.5 py-0.5 font-semibold tracking-[0.12em] text-amber">SIMULATED</p>
+          <p className="absolute left-3 top-1/2 -translate-y-1/2">{mk.left}</p>
+          <p className="absolute right-3 top-1/2 -translate-y-1/2">{mk.right}</p>
+          <p className="absolute left-1/2 top-3 -translate-x-1/2">{mk.top}</p>
+          <p className="absolute bottom-3 left-1/2 -translate-x-1/2">{mk.bottom}</p>
+          <p className="absolute bottom-3 left-3 rounded bg-black/60 px-1.5 py-0.5 font-semibold tracking-[0.12em] text-amber">SAMPLE STUDY</p>
+          <p className="absolute bottom-3 right-3 max-w-[45%] text-right text-[10px] text-white/50">{vol?.meta.source ?? "TCIA · CC BY 3.0"}</p>
         </div>
       </div>
     </figure>
