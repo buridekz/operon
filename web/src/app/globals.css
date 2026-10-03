@@ -102,8 +102,8 @@
   --foreground: #f5f5f7;
   --tile: #1c1c1e;
   --tile-raised: #2c2c2e;
-  --label-2: #a1a1a6;   /* secondary text: 7.6:1 on the tile */
-  --label-3: #6e6e73;   /* tertiary: captions only */
+  --label-2: #a1a1a6;   /* secondary text: 6.6:1 on the tile */
+  --label-3: #8e8e93;   /* tertiary: captions and hints, 5.1:1 on the tile */
   --card: #1c1c1e;
   --card-foreground: #f5f5f7;
   --popover: #2c2c2e;

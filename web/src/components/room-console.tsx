@@ -91,9 +91,15 @@ function Capsule({ className, ...props }: React.ComponentProps<"button">) {
   );
 }
 
-function ControlBar({ children }: { children: React.ReactNode }) {
+function ControlBar({ children, fade }: { children: React.ReactNode; fade?: boolean }) {
   return (
-    <nav aria-label="Controls" className="pointer-events-none fixed inset-x-0 bottom-6 z-20 flex justify-center px-4">
+    <nav
+      aria-label="Controls"
+      className={cn(
+        "pointer-events-none fixed inset-x-0 z-20 flex justify-center px-4",
+        fade ? "bottom-0 bg-gradient-to-t from-black via-black/85 to-transparent pb-6 pt-14" : "bottom-6",
+      )}
+    >
       <div className="pointer-events-auto flex max-w-full items-center gap-1 overflow-x-auto rounded-full bg-tile p-1.5 shadow-[0_12px_32px_rgba(0,0,0,0.7)] ring-1 ring-white/[0.08]">
         {children}
       </div>
@@ -283,7 +289,7 @@ export function RoomConsole() {
               ))}
             </fieldset>
           ))}
-          <ControlBar>
+          <ControlBar fade>
             <Capsule type="submit" form="case" disabled={busy} className={primaryCapsule}>
               Continue <ChevronRight className="size-4" aria-hidden />
             </Capsule>
@@ -388,7 +394,7 @@ export function RoomConsole() {
             <Capsule onClick={() => setTyping((t) => !t)} aria-pressed={typing}>
               {typing ? <X className="size-4" aria-hidden /> : <Keyboard className="size-4" aria-hidden />} <span className="max-sm:sr-only">Type</span>
             </Capsule>
-            <Capsule onClick={stop} disabled={busy} className="text-critical hover:bg-critical-soft">
+            <Capsule onClick={stop} disabled={busy} className="text-label-2 hover:bg-critical-soft hover:text-critical focus-visible:text-critical">
               <Square className="size-4" aria-hidden /> <span className="max-sm:sr-only">Stop ARNIE</span>
             </Capsule>
           </ControlBar>

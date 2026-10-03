@@ -147,16 +147,16 @@ export function CtViewer({ imaging, className }: { imaging: Imaging; className?:
             <p>{VIEW_LABEL[imaging.view]} · {imaging.view === "axial" ? "slice" : "plane"} {shown}/{total || "…"}</p>
             {imaging.playing && <p className="text-teal">▶ playing</p>}
           </div>
-          <div className="absolute right-3 top-3 text-right">
+          <div className="absolute right-3 top-3 text-right max-sm:left-3 max-sm:right-auto max-sm:top-9 max-sm:text-left">
             <p>{win.label} · W {win.w} L {win.l}</p>
             <p>Zoom {imaging.zoom.toFixed(1)}×{imaging.rotation ? ` · ${imaging.rotation}°` : ""}</p>
           </div>
-          <p className="absolute left-3 top-1/2 -translate-y-1/2">{mk.left}</p>
-          <p className="absolute right-3 top-1/2 -translate-y-1/2">{mk.right}</p>
-          <p className="absolute left-1/2 top-3 -translate-x-1/2">{mk.top}</p>
-          <p className="absolute bottom-3 left-1/2 -translate-x-1/2">{mk.bottom}</p>
+          <p className="absolute left-3 top-1/2 -translate-y-1/2 max-sm:hidden">{mk.left}</p>
+          <p className="absolute right-3 top-1/2 -translate-y-1/2 max-sm:hidden">{mk.right}</p>
+          <p className="absolute left-1/2 top-3 -translate-x-1/2 max-sm:hidden">{mk.top}</p>
+          <p className="absolute bottom-3 left-1/2 -translate-x-1/2 max-sm:hidden">{mk.bottom}</p>
           <p className="absolute bottom-3 left-3 rounded bg-black/60 px-1.5 py-0.5 font-semibold tracking-[0.12em] text-amber">SAMPLE STUDY</p>
-          <p className="absolute bottom-3 right-3 max-w-[45%] text-right text-[10px] text-white/50">{vol?.meta.source ?? "TCIA · CC BY 3.0"}</p>
+          <p className="absolute bottom-3 right-3 max-w-[45%] text-right text-[10px] text-white/50 max-sm:max-w-[60%]">{vol?.meta.source ?? "TCIA · CC BY 3.0"}</p>
         </div>
       </div>
     </figure>
