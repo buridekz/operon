@@ -3,10 +3,11 @@
 import "dotenv/config";
 import express, { type Response } from "express";
 import cors from "cors";
-import { createState, handle, applyIntent, applyScreen, tick, consultJoined, endConsult, view, signRecord, severityOf, SAY_AGAIN, type CaseSetup, type Opts, type Severity, type Turn } from "./brain.js";
+import { createState, handle, applyIntent, applyScreen, chatContext, tick, consultJoined, endConsult, view, signRecord, severityOf, SAY_AGAIN, type CaseSetup, type Opts, type Severity, type Turn } from "./brain.js";
 import { rtcRtmToken, startAgent, speak, stopAgent, type AgoraConfig } from "./agora.js";
 import { createIntentParser } from "./intent.js";
 import { createDrugScreener } from "./drugscreen.js";
+import { createChat } from "./chat.js";
 import { TurnTracker } from "./turns.js";
 
 const cfg: AgoraConfig = {
@@ -28,6 +29,14 @@ const opts: Opts = { minuteMs: Number(process.env.DEMO_MINUTE_MS || 60000), aler
 const parseIntent = createIntentParser(process.env.OPENAI_API_KEY, process.env.OPENAI_MODEL || "gpt-5.4-mini");
 const screenDrug = createDrugScreener(process.env.OPENAI_API_KEY, process.env.OPENAI_MODEL || "gpt-5.4-mini");
 let lastScreenAt = 0;
+const chat = createChat(process.env.OPENAI_API_KEY, process.env.OPENAI_MODEL || "gpt-5.4-mini");
+
+/** Vega answering in its own words (see chat.ts). Falls back to "say that again" if the model is unavailable. */
+async function converse(said: string): Promise<{ reply: string; via: "llm" | "rules" }> {
+  const text = chat ? await chat(said, chatContext(state, Date.now(), opts)) : null;
+  console.log(`[chat] "${said}" -> ${text ?? "(no answer)"}`);
+  return text ? { reply: text, via: "llm" } : { reply: SAY_AGAIN, via: "rules" };
+}
 
 type Line = { who: "heard" | "sv"; text: string; severity?: Severity; at: number; via?: "rules" | "llm" };
 let state = createState();
@@ -58,6 +67,7 @@ async function respond(heard: string): Promise<{ reply: string | null; via: "rul
   const now = Date.now();
   const turn: Turn = handle(state, heard, now, opts);
   if (turn === null || typeof turn === "string") return { reply: turn, via: "rules" };
+  if ("chat" in turn) return converse(turn.chat);
   if ("screen" in turn) { // room speech naming a drug that isn't in our list
     if (!screenDrug || Date.now() - lastScreenAt < 3000) return { reply: null, via: "rules" };
     lastScreenAt = Date.now();
@@ -68,6 +78,7 @@ async function respond(heard: string): Promise<{ reply: string | null; via: "rul
   if (!parseIntent) return { reply: SAY_AGAIN, via: "rules" };
   const intent = await parseIntent(turn.parse);
   console.log(`[llm] "${turn.parse}" -> ${JSON.stringify(intent)}`);
+  if (intent.intent === "conversation") return converse(turn.parse);
   return { reply: applyIntent(state, intent, Date.now(), opts), via: "llm" };
 }
 
