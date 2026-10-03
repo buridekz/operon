@@ -32,39 +32,9 @@ function useNow() {
 const sectionTitle = "text-[15px] font-medium text-label-2";
 
 // ---------- Header ----------
-const STEPS: { key: keyof EngineView["checklists"] | "surgery"; label: string }[] = [
-  { key: "signin", label: "Sign in" },
-  { key: "timeout", label: "Time out" },
-  { key: "surgery", label: "Surgery" },
-  { key: "signout", label: "Sign out" },
-];
-
-function PhaseSteps({ v }: { v: EngineView }) {
-  const done = (k: (typeof STEPS)[number]["key"]) =>
-    k === "surgery" ? v.milestones.closure != null || v.checklists.signout.complete : v.checklists[k].complete;
-  const current = (k: (typeof STEPS)[number]["key"]) => (k === "surgery" ? v.phase === "surgery" : v.phase === k);
-  return (
-    <ol className="flex items-center gap-1 rounded-full bg-tile p-1" aria-label="Case phase">
-      {STEPS.map((s) => (
-        <li
-          key={s.key}
-          aria-current={current(s.key) ? "step" : undefined}
-          className={cn(
-            "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px]",
-            current(s.key) ? "bg-foreground font-semibold text-black" : done(s.key) ? "text-foreground" : "text-label-3",
-          )}
-        >
-          {done(s.key) && !current(s.key) && <Check className="size-3.5" strokeWidth={3} aria-hidden />}
-          {s.label}
-        </li>
-      ))}
-    </ol>
-  );
-}
-
 function ArnieStatus({ v, now }: { v: EngineView; now: number | null }) {
   const mood = arnieMood(v, now);
-  const dot = mood === "critical" ? "bg-critical" : mood === "warning" ? "bg-amber" : mood === "paused" || mood === "off" ? "bg-label-3" : "bg-teal";
+  const dot = mood === "critical" ? "bg-critical" : mood === "warning" ? "bg-amber" : mood === "off" ? "bg-label-3" : "bg-teal";
   return (
     <p className="flex items-center gap-2 text-[15px]" aria-live="polite">
       <span aria-hidden className={cn("size-2.5 rounded-full", dot, (mood === "listening" || mood === "thinking" || mood === "speaking") && "motion-safe:animate-pulse")} />
@@ -365,16 +335,14 @@ export function Board() {
     <main className="flex min-h-dvh w-full flex-1 flex-col gap-5 p-4 sm:p-6 lg:h-dvh lg:min-h-0 lg:flex-none lg:overflow-hidden">
       <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 px-1">
         <div className="flex min-w-0 items-center gap-4">
-          <Logo size={24} />
-          <span aria-hidden className="h-6 w-px bg-white/15 max-sm:hidden" />
-          <h1 className="min-w-0 truncate text-[20px]">
-            <span className="font-semibold">{v.case.room}</span>
-            <span className="text-label-2"> · {v.case.patient}</span>
-            <span className="text-label-2 max-lg:hidden"> · {v.case.procedure}</span>
-          </h1>
+          <Logo size={26} />
+          <div className="min-w-0">
+            <h1 className="truncate text-[22px] font-semibold leading-tight tracking-[-0.01em]">{v.case.patient}</h1>
+            <p className="truncate text-[15px] text-label-2">{v.case.room} · {v.case.procedure}</p>
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
-          <PhaseSteps v={v} />
+        <div className="flex items-center gap-5">
+          {!connected && <span role="status" className="text-[15px] text-amber">Reconnecting…</span>}
           <ArnieStatus v={v} now={now} />
           <button
             type="button"
@@ -382,12 +350,11 @@ export function Board() {
             aria-pressed={!!audio}
             aria-label={audio ? "Alert tones on" : "Alert tones off"}
             title={audio ? "Alert tones on" : "Turn on alert tones"}
-            className="inline-flex size-9 items-center justify-center rounded-full bg-tile text-label-2 transition-colors hover:text-foreground"
+            className="inline-flex size-9 items-center justify-center rounded-full text-label-2 transition-colors hover:bg-tile hover:text-foreground"
           >
-            {audio ? <Volume2 className="size-4" aria-hidden /> : <VolumeX className="size-4" aria-hidden />}
+            {audio ? <Volume2 className="size-5" aria-hidden /> : <VolumeX className="size-5" aria-hidden />}
           </button>
-          <span aria-label={connected ? "Connected" : "Reconnecting"} className={cn("size-2 rounded-full", connected ? "bg-teal" : "bg-amber")} />
-          <span className="tnum text-[34px] font-semibold tracking-[-0.02em]">{d ? `${pad2(d.getHours())}:${pad2(d.getMinutes())}` : "--:--"}</span>
+          <span className="tnum text-[34px] font-semibold leading-none tracking-[-0.02em]">{d ? `${pad2(d.getHours())}:${pad2(d.getMinutes())}` : "--:--"}</span>
         </div>
       </header>
 

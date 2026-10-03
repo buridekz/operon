@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type * as React from "react";
 import Link from "next/link";
-import { Check, ChevronRight, CircleStop, Keyboard, Mic, MicOff, MonitorUp, X } from "lucide-react";
+import { Check, ChevronRight, CircleStop, Keyboard, Mic, MonitorUp, X } from "lucide-react";
 import { ArnieOrb } from "@/components/arnie-orb";
 import { Logo } from "@/components/vega-ring";
 import { cn } from "@/lib/utils";
@@ -20,7 +20,7 @@ const STEPS: { key: Step; label: string }[] = [
   { key: "live", label: "Live" },
 ];
 
-type Field = { name: string; label: string; value: string; hint?: string; wide?: boolean };
+type Field = { name: string; label: string; value: string; hint?: string; wide?: boolean; multiline?: boolean };
 const GROUPS: { title: string; fields: Field[] }[] = [
   {
     title: "Patient",
@@ -36,6 +36,18 @@ const GROUPS: { title: string; fields: Field[] }[] = [
       { name: "site", label: "Surgical site", value: "left thigh" },
       { name: "summary", label: "One-line summary", value: "58-year-old male, left femoral bleed", hint: "ARNIE reads this to a specialist you call in." },
       { name: "specialists", label: "On-call specialists", value: "vascular: Dr. Valdez; orthopedics: Dr. Lim; anesthesia: Dr. Ramos", hint: "Specialty: name, separated by semicolons. Say “ARNIE, call vascular” or the doctor’s name.", wide: true },
+    ],
+  },
+  {
+    title: "Patient notes",
+    fields: [
+      {
+        name: "notes",
+        label: "History",
+        value: "Type 2 diabetes, on metformin. Hypertension, on amlodipine. Right knee arthroscopy in 2019. Non-smoker. No known anesthesia complications.",
+        hint: "Demo data. Anything written here, ARNIE can answer questions about (\u201cis the patient diabetic?\u201d). It says so when something isn\u2019t in the notes, and never gives a dose.",
+        multiline: true,
+      },
     ],
   },
   {
@@ -58,6 +70,7 @@ function caseFromForm(form: HTMLFormElement): CaseSetup {
     preop: { potassium: get("potassium"), hemoglobin: get("hemoglobin") },
     orders: get("orders"),
     specialists: get("specialists"),
+    notes: get("notes"),
   };
 }
 
@@ -184,28 +197,6 @@ export function RoomConsole() {
     }
   }
 
-  // Pause: the room mic goes silent and the engine ignores speech, so the team can talk about
-  // ARNIE (or explain a demo) without it reacting. Manual only: the Pause button or the M key.
-  const [micMuted, setMicMuted] = useState(false);
-  const paused = !!view?.paused || micMuted;
-  async function togglePause() {
-    const next = !paused;
-    await callRef.current?.mic.setMuted(next).catch(() => {});
-    setMicMuted(next);
-    await engine("/api/listen", { paused: next }).catch(() => {});
-  }
-  useEffect(() => {
-    if (step !== "live") return;
-    const onKey = (e: KeyboardEvent) => {
-      const el = e.target as HTMLElement | null;
-      if (e.key.toLowerCase() !== "m" || e.metaKey || e.ctrlKey || e.altKey || el?.closest("input, textarea, [contenteditable]")) return;
-      e.preventDefault();
-      void togglePause();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  });
-
   async function stop() {
     setBusy(true);
     await engine("/api/stop", {}).catch(() => {});
@@ -235,13 +226,11 @@ export function RoomConsole() {
     await engine("/api/simulate", { text });
   }
 
-  const mood = micMuted ? "paused" : arnieMood(view, now);
+  const mood = arnieMood(view, now);
   const m = MOOD[mood];
   const lastArnie = view ? lastArnieLine(view) : undefined;
   const sev = lastArnie?.severity ?? "info";
-  const line = paused
-    ? "Press M or Resume when you need me."
-    : lastArnie?.text ?? "Say “ARNIE, brief me” to begin.";
+  const line = lastArnie?.text ?? "Say “ARNIE, brief me” to begin.";
 
   return (
     <main className="relative flex min-h-dvh flex-1 flex-col">
@@ -249,7 +238,7 @@ export function RoomConsole() {
         <Logo size={24} />
         {step === "live" ? (
           <p className="flex items-center gap-2 text-[15px] text-label-2">
-            <span aria-hidden className={cn("size-2 rounded-full", view?.agent.running && !paused ? "bg-teal" : "bg-label-3")} />
+            <span aria-hidden className={cn("size-2 rounded-full", view?.agent.running ? "bg-teal" : "bg-label-3")} />
             {view?.case.room} · {view?.case.patient}
           </p>
         ) : (
@@ -270,15 +259,26 @@ export function RoomConsole() {
               <legend className="mb-2 px-4 text-[13px] text-label-2">{g.title}</legend>
               <div className="tile divide-y divide-white/[0.08] overflow-hidden !rounded-[22px]">
                 {g.fields.map((f) => (
-                  <div key={f.name} className="grid gap-1 px-4 py-3 transition-colors focus-within:bg-white/[0.03] sm:grid-cols-[180px_1fr] sm:items-center sm:gap-4">
+                  <div key={f.name} className={cn("grid gap-1 px-4 py-3 transition-colors focus-within:bg-white/[0.03] sm:grid-cols-[180px_1fr] sm:gap-4", f.multiline ? "sm:items-start" : "sm:items-center")}>
                     <label htmlFor={f.name} className="text-[15px] text-label-2">{f.label}</label>
-                    <input
-                      id={f.name}
-                      name={f.name}
-                      defaultValue={f.value}
-                      aria-describedby={f.hint ? `${f.name}-hint` : undefined}
-                      className="w-full min-w-0 bg-transparent text-[17px] text-foreground caret-white outline-none placeholder:text-label-3"
-                    />
+                    {f.multiline ? (
+                      <textarea
+                        id={f.name}
+                        name={f.name}
+                        rows={3}
+                        defaultValue={f.value}
+                        aria-describedby={f.hint ? `${f.name}-hint` : undefined}
+                        className="w-full min-w-0 resize-none bg-transparent text-[17px] leading-snug text-foreground caret-white outline-none placeholder:text-label-3"
+                      />
+                    ) : (
+                      <input
+                        id={f.name}
+                        name={f.name}
+                        defaultValue={f.value}
+                        aria-describedby={f.hint ? `${f.name}-hint` : undefined}
+                        className="w-full min-w-0 bg-transparent text-[17px] text-foreground caret-white outline-none placeholder:text-label-3"
+                      />
+                    )}
                   </div>
                 ))}
               </div>
@@ -335,9 +335,9 @@ export function RoomConsole() {
             state={m.orb}
             size={280}
             color={m.color}
-            speed={mood === "paused" || mood === "off" ? 0.25 : 1}
+            speed={mood === "off" ? 0.25 : 1}
             label={`ARNIE: ${m.word}`}
-            className={cn("transition-opacity duration-700", (mood === "paused" || mood === "off") && "opacity-35")}
+            className={cn("transition-opacity duration-700", mood === "off" && "opacity-35")}
           />
           <h1
             id="live-title"
@@ -346,7 +346,7 @@ export function RoomConsole() {
               "mt-8 text-[44px] font-semibold leading-none tracking-[-0.03em] transition-colors",
               mood === "critical" && "text-critical",
               mood === "warning" && "text-amber",
-              (mood === "paused" || mood === "off") && "text-label-2",
+              mood === "off" && "text-label-2",
             )}
           >
             {m.word}
@@ -354,8 +354,8 @@ export function RoomConsole() {
           <p
             className={cn(
               "mt-5 line-clamp-3 min-h-[4.8em] max-w-xl text-xl leading-relaxed text-label-2",
-              !paused && sev === "critical" && "text-critical",
-              !paused && sev === "warning" && "text-amber",
+              sev === "critical" && "text-critical",
+              sev === "warning" && "text-amber",
             )}
           >
             {line}
@@ -377,11 +377,6 @@ export function RoomConsole() {
           )}
 
           <ControlBar>
-            <Capsule onClick={togglePause} aria-pressed={paused} aria-keyshortcuts="M" className={cn(paused && primaryCapsule)}>
-              {paused ? <Mic className="size-4" aria-hidden /> : <MicOff className="size-4" aria-hidden />}
-              {paused ? "Resume" : "Pause"}
-              <kbd className="rounded-md bg-white/[0.08] px-1.5 font-sans text-[12px] text-label-2 max-sm:hidden">M</kbd>
-            </Capsule>
             <Link
               href="/board"
               target="_blank"

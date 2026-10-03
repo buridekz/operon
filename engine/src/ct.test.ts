@@ -97,34 +97,3 @@ describe("this scan's landmarks", () => {
     expect(s.imaging!.slice).toBe(88);
   });
 });
-
-describe("pause (manual only: the Room's Pause button / M key)", () => {
-  test("paused, ARNIE ignores everything, even a drug it would flag, and even 'ARNIE, resume'", () => {
-    const s = createState({ allergies: ["penicillin"] });
-    s.paused = true; // what POST /api/listen { paused: true } does
-    expect(handle(s, "So if the nurse says giving ampicillin, ARNIE would warn the team.", T0, opts)).toBeNull();
-    expect(say(s, "show the CT")).toBeNull();
-    expect(say(s, "resume")).toBeNull();
-    expect(s.paused).toBe(true);
-    expect(s.log).toHaveLength(0);
-    s.paused = false; // the button again
-    expect(handle(s, "Giving ampicillin", T0, opts)).toMatch(/^Caution: penicillin allergy/);
-  });
-
-  test("nothing said in the room pauses ARNIE", () => {
-    for (const p of ["pause listening", "stop listening", "go to sleep", "stand by", "mute", "pause"]) {
-      const s = createState();
-      say(s, p);
-      expect(s.paused).toBe(false);
-    }
-    const s = createState();
-    say(s, "show the CT");
-    expect(say(s, "stop")).toBe(`Slice 40 of ${CT_STUDY.slices}.`); // "stop" alone is the CT
-  });
-
-  test("the board sees it", () => {
-    const s = createState();
-    s.paused = true;
-    expect(view(s, T0, opts).paused).toBe(true);
-  });
-});

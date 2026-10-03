@@ -165,13 +165,6 @@ app.post("/api/start", async (_req, res) => {
   }
 });
 
-// The room's pause button: ARNIE stops listening (the mic is muted on the room device too).
-app.post("/api/listen", (req, res) => {
-  state.paused = req.body?.paused === true;
-  broadcast();
-  res.json({ ok: true, paused: state.paused });
-});
-
 app.post("/api/stop", async (_req, res) => {
   if (agentId) await stopAgent(cfg, agentId).catch((e) => console.error("[stop]", e.message));
   agentId = null;

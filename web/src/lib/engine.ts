@@ -12,8 +12,6 @@ export type TranscriptLine = { who: "heard" | "sv"; text: string; severity?: Sev
 
 export type EngineView = {
   phase: "idle" | "signin" | "timeout" | "signout" | "surgery" | "done";
-  /** ARNIE isn't listening (paused by voice or by the room's pause button). */
-  paused: boolean;
   case: { patient: string; summary: string; procedure: string; site: string; room: string; allergies: string[]; orders: string[]; preop: Record<string, string> };
   checklists: Record<"signin" | "timeout" | "signout", ChecklistView>;
   pending: unknown;
@@ -52,6 +50,8 @@ export type CaseSetup = {
   orders: string;
   /** On-call roster, e.g. "vascular: Dr. Valdez; orthopedics: Dr. Lim". */
   specialists: string;
+  /** Free-text patient notes ARNIE can answer questions from. */
+  notes: string;
 };
 
 let cached: Promise<string> | null = null;
