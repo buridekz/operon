@@ -29,12 +29,14 @@ export function SpecialistPhone() {
   const { view } = useEngineState();
   const [audio, setAudio] = useState<AudioContext | null>(null);
   // The consult we answered, identified by its start time; "joined" is derived from it.
-  const [answeredStart, setAnsweredStart] = useState<number | null>(null);
+  // "connected" turns true once the call is actually up (after the mic permission prompt).
+  const [answered, setAnswered] = useState<{ start: number; connected: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const callRef = useRef<Call | null>(null);
 
   const consult = view?.consult ?? null;
-  const joined = !!consult && answeredStart === consult.start && consult.state !== "ended";
+  const joined = !!consult && answered?.start === consult.start && consult.state !== "ended";
+  const connected = joined && !!answered?.connected;
   const ringing = consult?.state === "ringing" && !joined;
 
   // Ring while a consult is waiting to be answered.
@@ -58,24 +60,33 @@ export function SpecialistPhone() {
   async function answer() {
     setError(null);
     if (!consult) return;
+    const start = consult.start;
     try {
-      setAnsweredStart(consult.start);
+      setAnswered({ start, connected: false });
       callRef.current = await joinChannel("specialist");
-      await engine("/api/consult/joined", {});
+      setAnswered({ start, connected: true });
+      const { brief } = await engine<{ brief: string | null }>("/api/consult/joined", {});
+      if (!brief) { // the OR ended the call while we were connecting
+        await callRef.current?.leave();
+        callRef.current = null;
+        setAnswered(null);
+      }
     } catch (e) {
-      setAnsweredStart(null);
+      setAnswered(null);
       setError((e as Error).message);
     }
   }
 
+  /** Hang up or decline: tell the OR, so Vega says so and goes back to normal. */
   async function hangUp() {
     await callRef.current?.leave();
     callRef.current = null;
-    setAnsweredStart(null);
+    setAnswered(null);
+    await engine("/api/consult/end", {}).catch(() => {});
   }
 
   const brief = consult ? [...(view?.transcript ?? [])].reverse().find((t) => t.who === "sv" && t.text.startsWith(consult.doctor)) : undefined;
-  const state = joined ? "Connected" : consult?.state === "ringing" ? "Ringing…" : consult?.state === "ended" ? "Ended" : consult ? "Live" : "Idle";
+  const state = connected ? "Connected" : joined ? "Connecting…" : consult?.state === "ringing" ? "Ringing…" : consult?.state === "ended" ? "Ended" : consult ? "Live" : "Idle";
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center gap-6 px-4 py-10">
@@ -84,14 +95,16 @@ export function SpecialistPhone() {
         <CardHeader>
           <CardTitle className="font-heading text-3xl">{consult?.doctor ?? "On call"}</CardTitle>
           <CardDescription>
-            {consult ? `${consult.specialty[0].toUpperCase()}${consult.specialty.slice(1)} · ${view?.case.room} is calling` : "Waiting for a consult request"}
+            {consult
+              ? `${consult.specialty[0].toUpperCase()}${consult.specialty.slice(1)} · ${view?.case.room} ${connected ? "is on the line" : "is calling"}`
+              : "Waiting for a consult request"}
           </CardDescription>
           <CardAction>
             <Badge className="bg-teal-soft font-mono text-teal">{state}</Badge>
           </CardAction>
         </CardHeader>
         <CardContent className="grid gap-4">
-          {!audio && (
+          {!audio && !joined && (
             <Button variant="secondary" size="lg" onClick={() => setAudio(new AudioContext())}>
               Tap once to enable the ringer
             </Button>
@@ -107,6 +120,7 @@ export function SpecialistPhone() {
           )}
           {joined && (
             <>
+              {!connected && <p className="text-muted-foreground">Allow the microphone when your browser asks.</p>}
               {brief && (
                 <blockquote className="border-l-[3px] border-teal pl-3 text-lg leading-snug">
                   <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.1em] text-teal">Vega briefing</span>

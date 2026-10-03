@@ -3,7 +3,7 @@
 import "dotenv/config";
 import express, { type Response } from "express";
 import cors from "cors";
-import { createState, handle, applyIntent, tick, consultJoined, view, signRecord, severityOf, SAY_AGAIN, type CaseSetup, type Opts, type Severity, type Turn } from "./brain.js";
+import { createState, handle, applyIntent, tick, consultJoined, endConsult, view, signRecord, severityOf, SAY_AGAIN, type CaseSetup, type Opts, type Severity, type Turn } from "./brain.js";
 import { rtcRtmToken, startAgent, speak, stopAgent, type AgoraConfig } from "./agora.js";
 import { createIntentParser } from "./intent.js";
 import { TurnTracker } from "./turns.js";
@@ -141,6 +141,13 @@ app.post("/api/consult/joined", async (_req, res) => {
   const brief = consultJoined(state, Date.now(), opts);
   if (brief) await speakOut(brief, "INTERRUPT");
   res.json({ ok: true, brief });
+});
+
+// The specialist hung up or declined: Vega tells the room and is back to normal.
+app.post("/api/consult/end", async (_req, res) => {
+  const said = endConsult(state, Date.now(), "specialist");
+  if (said) await speakOut(said);
+  res.json({ ok: true, said });
 });
 
 // Rehearsal: feed a sentence as if heard (no microphone needed). Replies are spoken if the agent runs.
