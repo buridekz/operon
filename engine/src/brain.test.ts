@@ -2,7 +2,7 @@ import { describe, test, expect } from "vitest";
 import { createState, handle, tick, consultJoined, view, applyIntent, EMPTY_INTENT, SAY_AGAIN, type State, type Intent } from "./brain.js";
 import { matchDrug } from "./formulary.js";
 
-const T0 = new Date("2026-10-04T14:20:00").getTime();
+const T0 = new Date("2026-10-04T14:20:00+08:00").getTime();
 const MIN = 60000;
 const opts = { minuteMs: MIN };
 const GAP = 5000; // answers come a few seconds after each question has been spoken

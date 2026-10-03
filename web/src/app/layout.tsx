@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   description: "Voice safety assistant for the operating room, built on Agora Conversational AI.",
 };
 
-export const viewport: Viewport = { themeColor: "#0a1314" };
+export const viewport: Viewport = { themeColor: "#000000" };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (

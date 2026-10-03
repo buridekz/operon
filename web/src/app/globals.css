@@ -91,46 +91,47 @@
 }
 
 .dark {
-  /* Operon clinical palette */
-  --background: #0a1314;
-  --foreground: #e6f0ee;
-  --card: #101e1f;
-  --card-foreground: #e6f0ee;
-  --popover: #101e1f;
-  --popover-foreground: #e6f0ee;
-  --primary: #3fc1ae;
-  --primary-foreground: #0a1314;
-  --secondary: #162827;
-  --secondary-foreground: #e6f0ee;
-  --muted: #162827;
-  --muted-foreground: #93aaa7;
-  --accent: #162827;
-  --accent-foreground: #e6f0ee;
-  --destructive: #f07a6a;
-  --border: #24393a;
-  --input: #24393a;
-  --ring: #3fc1ae;
-  --teal: #3fc1ae;
-  --teal-soft: rgba(63, 193, 174, 0.14);
-  --amber: #f2b84b;
-  --amber-soft: rgba(242, 184, 75, 0.15);
-  --surgeon: #c9d7ff;
-  /* Alarm colors follow IEC 60601-1-8: red = high priority, yellow = medium, cyan/teal = info */
-  --critical: #ff6b5e;
-  --critical-soft: rgba(255, 107, 94, 0.16);
-  --chart-1: #3fc1ae;
-  --chart-2: #f2b84b;
-  --chart-3: #c9d7ff;
-  --chart-4: #93aaa7;
-  --chart-5: #5f7775;
-  --sidebar: #101e1f;
-  --sidebar-foreground: #e6f0ee;
-  --sidebar-primary: #3fc1ae;
-  --sidebar-primary-foreground: #0a1314;
-  --sidebar-accent: #162827;
-  --sidebar-accent-foreground: #e6f0ee;
-  --sidebar-border: #24393a;
-  --sidebar-ring: #3fc1ae;
+  /* Operon "patient monitor" palette: pitch black, monitor colors carry meaning.
+     green = Vega / confirmed (heart-rate trace), cyan = team speech & chrome (monitor bar),
+     yellow = warning, red = critical (IEC 60601-1-8 alarm colors). */
+  --background: #000000;
+  --foreground: #f4f4f4;
+  --card: #0a0a0a;
+  --card-foreground: #f4f4f4;
+  --popover: #0a0a0a;
+  --popover-foreground: #f4f4f4;
+  --primary: #34e27c;
+  --primary-foreground: #000000;
+  --secondary: #151515;
+  --secondary-foreground: #f4f4f4;
+  --muted: #151515;
+  --muted-foreground: #9a9a9a;
+  --accent: #151515;
+  --accent-foreground: #f4f4f4;
+  --destructive: #ff4040;
+  --border: #262626;
+  --input: #2e2e2e;
+  --ring: #34e27c;
+  --teal: #34e27c;
+  --teal-soft: rgba(52, 226, 124, 0.12);
+  --amber: #f4e04d;
+  --amber-soft: rgba(244, 224, 77, 0.13);
+  --surgeon: #3cd6e0;
+  --critical: #ff4040;
+  --critical-soft: rgba(255, 64, 64, 0.14);
+  --chart-1: #34e27c;
+  --chart-2: #f4e04d;
+  --chart-3: #3cd6e0;
+  --chart-4: #ff4040;
+  --chart-5: #9a9a9a;
+  --sidebar: #0a0a0a;
+  --sidebar-foreground: #f4f4f4;
+  --sidebar-primary: #34e27c;
+  --sidebar-primary-foreground: #000000;
+  --sidebar-accent: #151515;
+  --sidebar-accent-foreground: #f4f4f4;
+  --sidebar-border: #262626;
+  --sidebar-ring: #34e27c;
 }
 
 @layer base {
@@ -163,35 +164,24 @@
   .alarm-pulse { animation: alarm-pulse 1.4s ease-in-out infinite; }
 }
 
-/* ---------- Chart mode: the operative record reads like paper and prints cleanly ---------- */
-.chart {
-  --background: #f5f2ea;
-  --foreground: #142120;
-  --card: #fffdf8;
-  --card-foreground: #142120;
-  --popover: #fffdf8;
-  --popover-foreground: #142120;
-  --primary: #0b6e61;
-  --primary-foreground: #ffffff;
-  --secondary: #ebe6db;
-  --secondary-foreground: #142120;
-  --muted: #ebe6db;
-  --muted-foreground: #5a6967;
-  --accent: #ebe6db;
-  --accent-foreground: #142120;
-  --border: #dad3c4;
-  --input: #dad3c4;
-  --ring: #0b6e61;
-  --teal: #0b6e61;
-  --teal-soft: rgba(11, 110, 97, 0.1);
-  --amber: #8f5400;
-  --amber-soft: rgba(143, 84, 0, 0.1);
-  --critical: #b42318;
-  --critical-soft: rgba(180, 35, 24, 0.08);
-  background: var(--background);
-  color: var(--foreground);
-}
+/* ---------- Record: black on screen like the rest of the UI, white paper when printed ---------- */
 @media print {
-  .chart { background: #fff; }
+  .chart {
+    --background: #ffffff;
+    --foreground: #111111;
+    --card: #ffffff;
+    --card-foreground: #111111;
+    --secondary: #f1f1f1;
+    --muted: #f1f1f1;
+    --muted-foreground: #555555;
+    --border: #d4d4d4;
+    --input: #d4d4d4;
+    --teal: #0b7a3e;
+    --teal-soft: rgba(11, 122, 62, 0.1);
+    --amber: #8a6d00;
+    --critical: #b42318;
+    background: #ffffff;
+    color: #111111;
+  }
   .no-print { display: none !important; }
 }

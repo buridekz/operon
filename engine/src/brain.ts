@@ -140,10 +140,11 @@ const WORD_NUM: Record<string, number> = {
 const num = (s: string | undefined): number => (s ? (/^\d+$/.test(s) ? Number(s) : WORD_NUM[s.toLowerCase()] ?? NaN) : NaN);
 const NUM = String.raw`(\d+|a|an|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty)`;
 
-export const clock = (ms: number) => {
-  const d = new Date(ms);
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-};
+// Times are spoken and logged in the hospital's time zone, not the server's
+// (the engine runs on a UTC host; found when Vega said 18:05 at 02:05 Manila time).
+const TIME_ZONE = process.env.CASE_TIMEZONE || "Asia/Manila";
+const hhmm = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: TIME_ZONE });
+export const clock = (ms: number) => hhmm.format(new Date(ms));
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 const minutesSince = (ms: number, now: number, minuteMs: number) => Math.floor((now - ms) / minuteMs);
