@@ -12,10 +12,10 @@ A voice safety assistant for the operating room, built for the Agora Voice First
 
 ## Live
 
-- **Web app (Vercel):** https://operon-xi-ten.vercel.app (`/room`, `/board`, `/specialist`, `/record`)
+- **Web app (Vercel):** https://operon-vega.vercel.app (`/room`, `/board`, `/specialist`, `/record`)
 - **Engine (Render, Singapore):** https://operon-engine.onrender.com (Agora calls its `/chat/completions`)
 - Free tier: the engine sleeps when idle and takes about a minute to wake. Open the board a few minutes before a demo.
-- Merges to `main` redeploy the engine on Render automatically; redeploy the web app with `npx vercel deploy --prod` in `web/`.
+- Merges to `main` redeploy both automatically: the engine on Render (root `engine/`) and the web app on Vercel (root `web/`).
 
 ## The real build
 
