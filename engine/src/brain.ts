@@ -177,7 +177,7 @@ const NO = /\b(cancel|no,? wait|wrong|correction|negative|scratch that)\b/i;
 const QUESTION = /^(what|whats|what's|which|how many|how much|when|who|tell me|remind me|read( me)? back|any|is there|are there|do we have|list|check)\b|\?$/i;
 const PAUSE = /\b(pause|stop|mute)\s+(listening|yourself|the mic)\b|\bgo (to )?sleep\b|\bstand ?by\b|^mute\b|^pause$/i;
 const RESUME = /\b(resume|wake up|start listening|unmute|i'?m back|back on|listen up)\b|^listen\b/i;
-const ABOUT_ARNIE = /\b(your name|who are you|what are you|who made you|who built you|what can you do|how can you help|what do you do|introduce yourself|tell (?:me|us) about yourself|how are you|are you (?:there|listening|ready|awake)|thank(?:s| you)|good (?:morning|afternoon|evening|job)|hello|hi there)\b/i;
+const ABOUT_ARNIE = /\b(your name|who are you|what are you|stand for|name mean|who(?:'s| is) arnie|what(?:'s| is) arnie|who made you|who built you|what can you do|how can you help|what do you do|introduce yourself|tell (?:me|us) about yourself|how are you|are you (?:there|listening|ready|awake)|thank(?:s| you)|good (?:morning|afternoon|evening|job)|hello|hi there)\b/i;
 const SKIP = /\b(skip|let'?s (just )?start|move on|later|no time|we'?re late|go ahead without)\b/i;
 export const SAY_AGAIN = "Sorry, say that again.";
 

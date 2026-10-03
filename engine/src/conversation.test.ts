@@ -57,3 +57,12 @@ describe("decision questions", () => {
     expect(handle(createState(), "ARNIE, give more heparin", T0, opts)).toMatch(/^Heparin, /);
   });
 });
+
+describe("ARNIE introducing itself", () => {
+  test.each([
+    "ARNIE, who are you?", "ARNIE, what does ARNIE stand for?", "ARNIE, what does your name mean?",
+    "ARNIE, who is ARNIE?", "ARNIE, introduce yourself", "Hey ARNIE, what's your name?",
+  ])("%s goes to the introduction", (said) => {
+    expect(handle(createState(), said, T0, opts)).toHaveProperty("chat");
+  });
+});
