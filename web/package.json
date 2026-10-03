@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
+    "agora-extension-ai-denoiser": "^2.0.2",
     "agora-rtc-sdk-ng": "^4.24.8",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.4.0",
