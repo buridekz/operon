@@ -54,3 +54,22 @@ describe("speech-recognition sound-alikes", () => {
     expect(handle(s, "Confirmed", T0, opts)).toBe("Logged.");
   });
 });
+
+describe("what ARNIE comes through as (live Agora test and rehearsal)", () => {
+  test.each(["Arne", "Arnie", "Arney", "Arni"])("'%s' wakes it", (w) => {
+    expect(handle(createState(), `${w}, what's your name?`, T0, opts)).toHaveProperty("chat");
+    expect(handle(createState(), `${w}, go to the knee`, T0, opts)).toBe(`Knee, slice 108 of ${CT_STUDY.slices}.`);
+  });
+
+  test("'I need' wakes it only when a clear command follows", () => {
+    expect(handle(createState(), "I need, what time is it?", T0, opts)).toBe("It's 14:20.");
+    expect(handle(createState(), "I need, show the CT.", T0, opts)).toBe("Showing the CT.");
+    expect(handle(createState(), "I need, go to the knee", T0, opts)).toBe(`Knee, slice 108 of ${CT_STUDY.slices}.`);
+    expect(handle(createState(), "I need, brief me", T0, opts)).toMatch(/^Juan Cruz, /);
+    expect(handle(createState(), "I need more suction here", T0, opts)).toBeNull();
+    expect(handle(createState(), "I need a second", T0, opts)).toBeNull();
+    expect(handle(createState(), "I need, what's your name?", T0, opts)).toBeNull(); // never starts a chat
+    const s = createState({ allergies: ["penicillin"] });
+    expect(handle(s, "I need to give ampicillin", T0, opts)).toMatch(/^Caution: penicillin allergy/); // the safety check still runs
+  });
+});

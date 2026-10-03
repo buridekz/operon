@@ -161,7 +161,12 @@ export type Turn = string | null | { parse: string } | { screen: string } | { ch
 // Wake word: "ARNIE" (Always Ready Nurse, In Emergencies), Operon's voice agent. Speech recognition
 // may spell it Arnie, Arney, Arny, Arni or hear "Ernie"; all of these wake it. Whole word only, and
 // everyday words that sound close ("army", "Annie", "honey") never do.
-const WAKE = /\b(?:arnie|arney|arny|arni|arnee|ernie|earnie)(?:'s)?\b/i;
+// Live Agora test with synthesized speech: ARES wrote "Arnie" about half the time and "Arne" the rest.
+const WAKE = /\b(?:arnie|arne|arney|arny|arni|arnee|arnay|ernie|earnie|ahnie|arnies)(?:'s)?\b/i;
+/** What "ARNIE" also comes through as, but that is everyday talk too ("I need more suction"). At the start
+ *  of a sentence it only counts as the wake word when the rest is a clear command for the rules (never a
+ *  chat or a model guess), so "I need, what time is it?" works and "I need more suction" stays silent. */
+const SOFT_WAKE = /^\s*(?:i need|i knee|are knee|r knee|our knee|honey|and he)\b[\s,.:;-]*/i;
 const YES = /\b(confirm(ed)?|yes|yep|correct|complete(d)?|done|affirmative|marked|given|none|no concerns?|labell?ed|off)\b/i;
 const CONFIRM = /\b(confirm(ed)?|yes|correct|affirmative)\b/i;
 const NO = /\b(cancel|no,? wait|wrong|correction|negative|scratch that)\b/i;
@@ -736,8 +741,14 @@ function resolvePending(state: State, text: string, now: number): string | null 
 export function handle(state: State, text: string, now: number, opts: Opts): Turn {
   const heard = (text ?? "").trim();
   if (!heard) return null;
-  const woke = WAKE.test(heard);
-  const body = heard.replace(WAKE, "").replace(/^[\s,.:;-]+/, "").replace(/^(hey|ok|okay)[\s,]+/i, "");
+  let woke = WAKE.test(heard);
+  let body = heard.replace(WAKE, "").replace(/^[\s,.:;-]+/, "").replace(/^(hey|ok|okay)[\s,]+/i, "");
+  const soft = !woke && heard.match(SOFT_WAKE);
+  if (soft) {
+    const rest = heard.slice(soft[0].length);
+    const cmd = rest ? ruleIntent(normalizeHeard(rest)) : null;
+    if (cmd && cmd.intent !== "conversation") { woke = true; body = rest; }
+  }
 
   // Paused: everything is ignored except "ARNIE, resume".
   if (state.paused) {
