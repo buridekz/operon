@@ -73,3 +73,23 @@ describe("what ARNIE comes through as (live Agora test and rehearsal)", () => {
     expect(handle(s, "I need to give ampicillin", T0, opts)).toMatch(/^Caution: penicillin allergy/); // the safety check still runs
   });
 });
+
+describe("saying the name, pausing, then the command (rehearsal)", () => {
+  test("'Hey, Arni.' on its own, then the command without the name", () => {
+    const s = createState();
+    expect(handle(s, "Hey, Arni.", T0, opts)).toBe("I'm here.");
+    expect(handle(s, "What time is it?", T0 + 4000, opts)).toBe("It's 14:20.");
+    expect(handle(s, "What time is it?", T0 + 6000, opts)).toBeNull(); // the window is used up
+  });
+
+  test("the window closes after a while, and works for 'Ardi' too", () => {
+    const s = createState();
+    expect(handle(s, "Hey, Ardi.", T0, opts)).toBe("I'm here.");
+    expect(handle(s, "Show the CT", T0 + 15000, opts)).toBeNull();
+  });
+
+  test("the name with the command in one sentence still works as before", () => {
+    expect(handle(createState(), "Hey Arni, what time is it?", T0, opts)).toBe("It's 14:20.");
+    expect(handle(createState(), "Okay, Arnie, show the CT.", T0, opts)).toBe("Showing the CT.");
+  });
+});

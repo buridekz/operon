@@ -149,6 +149,8 @@ export type State = {
   signedAt: number | null;
   /** Not listening: the team is talking about ARNIE (a briefing, a demo), not to it. Alarms still sound. */
   paused: boolean;
+  /** Until when a sentence without the wake word still counts as addressed to ARNIE (after "Hey ARNIE" alone). */
+  attentionUntil: number;
   /** The last end-of-case summary ARNIE spoke (model-written from summaryFacts, or the template). */
   summary: { text: string; at: number } | null;
 };
@@ -162,7 +164,9 @@ export type Turn = string | null | { parse: string } | { screen: string } | { ch
 // may spell it Arnie, Arney, Arny, Arni or hear "Ernie"; all of these wake it. Whole word only, and
 // everyday words that sound close ("army", "Annie", "honey") never do.
 // Live Agora test with synthesized speech: ARES wrote "Arnie" about half the time and "Arne" the rest.
-const WAKE = /\b(?:arnie|arne|arney|arny|arni|arnee|arnay|ernie|earnie|ahnie|arnies)(?:'s)?\b/i;
+const WAKE = /\b(?:arnie|arne|arney|arny|arni|arnee|arnay|ardi|ardie|ernie|earnie|ahnie|arnies)(?:'s)?\b/i;
+/** After "Hey ARNIE" on its own, the next sentence within this window is for ARNIE (people pause after the name). */
+export const ATTENTION_MS = 10_000;
 /** What "ARNIE" also comes through as, but that is everyday talk too ("I need more suction"). At the start
  *  of a sentence it only counts as the wake word when the rest is a clear command for the rules (never a
  *  chat or a model guess), so "I need, what time is it?" works and "I need more suction" stays silent. */
@@ -221,6 +225,7 @@ export function createState(setup: CaseSetup = {}): State {
     imaging: null,
     signedAt: null,
     paused: false,
+    attentionUntil: 0,
     summary: null,
   };
 }
@@ -742,7 +747,11 @@ export function handle(state: State, text: string, now: number, opts: Opts): Tur
   const heard = (text ?? "").trim();
   if (!heard) return null;
   let woke = WAKE.test(heard);
-  let body = heard.replace(WAKE, "").replace(/^[\s,.:;-]+/, "").replace(/^(hey|ok|okay)[\s,]+/i, "");
+  // What's left after the name, without "hey"/"okay" and punctuation on either side of it.
+  let body = heard.replace(WAKE, "").replace(/^[\s,.:;!?-]*(?:(?:hey|hi|ok|okay)\b[\s,.:;!?-]*)*/i, "");
+  // Just said "Hey ARNIE" a moment ago and paused: this sentence is for ARNIE too.
+  if (!woke && now < state.attentionUntil) { woke = true; body = heard; }
+  if (woke) state.attentionUntil = 0;
   const soft = !woke && heard.match(SOFT_WAKE);
   if (soft) {
     const rest = heard.slice(soft[0].length);
@@ -758,6 +767,11 @@ export function handle(state: State, text: string, now: number, opts: Opts): Tur
   if (woke && PAUSE.test(body)) {
     state.paused = true;
     return "Paused. Say ARNIE, resume, when you need me.";
+  }
+  // Only the name ("Hey ARNIE."): answer, and take the next sentence as addressed to ARNIE.
+  if (woke && !/[a-z0-9]/i.test(body)) {
+    state.attentionUntil = now + ATTENTION_MS;
+    return "I'm here.";
   }
 
   // The team talking to each other, not to ARNIE: it stays out of it unless a medication that was
