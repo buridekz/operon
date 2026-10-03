@@ -1,13 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, CheckCircle2, OctagonAlert, PhoneCall } from "lucide-react";
+import { AlertTriangle, CheckCircle2, OctagonAlert, PhoneCall, Volume2, VolumeX } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CtViewer } from "@/components/ct-viewer";
+import { Logo, VegaRing } from "@/components/vega-ring";
 import { cn } from "@/lib/utils";
 import { mmss, pad2, type ChecklistView, type EngineView, type Severity } from "@/lib/engine";
 import { useEngineState } from "@/lib/use-engine";
+import { useEarcons } from "@/lib/earcons";
+import { phaseTicks, vegaState } from "@/lib/vega";
 
 type ChecklistKey = keyof EngineView["checklists"];
 const ALERT_MS = 12_000;
@@ -70,7 +73,7 @@ function AlertBanner({ v, now }: { v: EngineView; now: number | null }) {
       role="alert"
       className={cn(
         "flex items-center gap-4 rounded-xl border-2 px-5 py-4",
-        critical ? "border-critical bg-critical-soft text-critical" : "border-amber bg-amber-soft text-amber",
+        critical ? "alarm-pulse border-critical bg-critical-soft text-critical" : "border-amber bg-amber-soft text-amber",
       )}
     >
       <Icon className="size-9 shrink-0" aria-hidden />
@@ -273,6 +276,9 @@ export function Board() {
   const { view: v, connected } = useEngineState();
   const now = useNow();
   const d = now ? new Date(now) : null;
+  const [audio, setAudio] = useState<AudioContext | null>(null);
+  useEarcons(v, audio);
+  const vs = vegaState(v, now);
 
   if (!v) {
     return <main className="grid flex-1 place-items-center text-muted-foreground">Connecting to the Operon engine…</main>;
@@ -281,11 +287,22 @@ export function Board() {
   return (
     <main className="mx-auto flex w-full max-w-[1800px] flex-1 flex-col gap-4 p-4 sm:p-6">
       <header className="flex flex-wrap items-center justify-between gap-4 border-b pb-4">
-        <h1 className="font-heading text-2xl font-semibold">
-          {v.case.room} <span className="font-normal text-muted-foreground">· {v.case.patient} · {v.case.procedure}</span>
-        </h1>
+        <div className="flex min-w-0 items-center gap-4">
+          <Logo size={30} />
+          <span aria-hidden className="h-7 w-px bg-border" />
+          <h1 className="truncate text-lg">
+            <span className="font-semibold">{v.case.room}</span>
+            <span className="text-muted-foreground"> · {v.case.patient} · {v.case.procedure}</span>
+          </h1>
+        </div>
         <div className="flex flex-wrap items-center gap-5">
           <PhaseStepper v={v} />
+          <div className="flex items-center gap-2.5">
+            <VegaRing state={vs} ticks={phaseTicks(v)} size={46} />
+            <span className={cn("w-20 font-mono text-xs font-semibold uppercase tracking-[0.08em]", vs === "off" ? "text-muted-foreground" : vs === "warning" ? "text-amber" : vs === "critical" ? "text-critical" : "text-teal")}>
+              {vs === "off" ? "Vega off" : vs === "listening" ? "Listening" : vs === "speaking" ? "Speaking" : vs === "warning" ? "Warning" : "Critical"}
+            </span>
+          </div>
           <span className="font-mono text-4xl font-semibold tabular-nums">{d ? `${pad2(d.getHours())}:${pad2(d.getMinutes())}` : "--:--"}</span>
         </div>
       </header>
@@ -346,9 +363,20 @@ export function Board() {
         </aside>
       </div>
 
-      <footer className="flex justify-between font-mono text-xs text-muted-foreground">
-        <span>{v.agent.running ? "Agent listening" : "Agent stopped"}{v.llm ? " · LLM fallback on" : ""}</span>
-        <span>{connected ? "live" : "reconnecting…"}</span>
+      <footer className="flex items-center justify-between gap-4 font-mono text-xs text-muted-foreground">
+        <span>{v.agent.running ? "Vega listening" : "Vega stopped"}{v.llm ? " · LLM fallback on" : ""}</span>
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={() => (audio ? (audio.close(), setAudio(null)) : setAudio(new AudioContext()))}
+            className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-foreground hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-pressed={!!audio}
+          >
+            {audio ? <Volume2 className="size-3.5" aria-hidden /> : <VolumeX className="size-3.5" aria-hidden />}
+            Alert tones {audio ? "on" : "off"}
+          </button>
+          <span>{connected ? "live" : "reconnecting…"}</span>
+        </div>
       </footer>
     </main>
   );

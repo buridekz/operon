@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { Printer } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Logo } from "@/components/vega-ring";
 import { cn } from "@/lib/utils";
 import { engine, type EngineView } from "@/lib/engine";
 import { useEngineState } from "@/lib/use-engine";
@@ -24,7 +26,7 @@ export function RecordView() {
   const { view: v } = useEngineState();
   const [busy, setBusy] = useState(false);
 
-  if (!v) return <main className="grid flex-1 place-items-center text-muted-foreground">Connecting to the Operon engine…</main>;
+  if (!v) return <div className="chart grid flex-1 place-items-center text-muted-foreground">Connecting to the Operon engine…</div>;
   const r = v.record;
 
   async function sign() {
@@ -34,8 +36,15 @@ export function RecordView() {
   }
 
   return (
+    <div className="chart flex-1">
     <main className="mx-auto w-full max-w-3xl px-4 py-10 sm:px-6">
-      <Card>
+      <div className="no-print mb-6 flex items-center justify-between gap-4">
+        <Logo size={28} />
+        <Button variant="outline" onClick={() => window.print()}>
+          <Printer className="size-4" aria-hidden /> Print
+        </Button>
+      </div>
+      <Card className="shadow-sm">
         <CardHeader className="border-b">
           <CardTitle className="font-heading text-3xl font-bold">{r.title}</CardTitle>
           <CardDescription className="text-base">
@@ -69,7 +78,7 @@ export function RecordView() {
             );
           })}
           {r.entries.length === 0 && <p className="text-muted-foreground">Nothing has been logged for this case yet.</p>}
-          <div className="flex flex-wrap items-center gap-3 border-t pt-5">
+          <div className="no-print flex flex-wrap items-center gap-3 border-t pt-5">
             <Button size="lg" onClick={sign} disabled={busy || !!r.signedAt || r.entries.length === 0}>
               {r.signedAt ? "Signed" : "Sign as surgeon"}
             </Button>
@@ -78,5 +87,6 @@ export function RecordView() {
         </CardContent>
       </Card>
     </main>
+    </div>
   );
 }
