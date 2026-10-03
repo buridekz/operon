@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type * as React from "react";
 import Link from "next/link";
-import { Check, ChevronRight, Keyboard, Mic, MicOff, MonitorUp, Square, X } from "lucide-react";
+import { Check, ChevronRight, CircleStop, Keyboard, Mic, MicOff, MonitorUp, X } from "lucide-react";
 import { ArnieOrb } from "@/components/arnie-orb";
 import { Logo } from "@/components/vega-ring";
 import { cn } from "@/lib/utils";
@@ -395,7 +395,7 @@ export function RoomConsole() {
               {typing ? <X className="size-4" aria-hidden /> : <Keyboard className="size-4" aria-hidden />} <span className="max-sm:sr-only">Type</span>
             </Capsule>
             <Capsule onClick={stop} disabled={busy} className="text-label-2 hover:bg-critical-soft hover:text-critical focus-visible:text-critical">
-              <Square className="size-4" aria-hidden /> <span className="max-sm:sr-only">Stop ARNIE</span>
+              <CircleStop className="size-4" aria-hidden /> <span className="max-sm:sr-only">Stop ARNIE</span>
             </Capsule>
           </ControlBar>
         </section>
