@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { Check, ExternalLink, Mic, Square } from "lucide-react";
+import { Check, ExternalLink, Mic, MicOff, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -171,6 +171,28 @@ export function RoomConsole() {
     }
   }
 
+  // Pause: the room mic goes silent and the engine ignores speech, so the team can talk about
+  // Vega (or explain a demo) without it reacting. Press M, or say "Vega, pause listening".
+  const [micMuted, setMicMuted] = useState(false);
+  const paused = !!view?.paused || micMuted;
+  async function togglePause() {
+    const next = !paused;
+    await callRef.current?.mic.setMuted(next).catch(() => {});
+    setMicMuted(next);
+    await engine("/api/listen", { paused: next }).catch(() => {});
+  }
+  useEffect(() => {
+    if (step !== "live") return;
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (e.key.toLowerCase() !== "m" || e.metaKey || e.ctrlKey || e.altKey || el?.closest("input, textarea, [contenteditable]")) return;
+      e.preventDefault();
+      void togglePause();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
   async function stop() {
     setBusy(true);
     await engine("/api/stop", {}).catch(() => {});
@@ -281,10 +303,10 @@ export function RoomConsole() {
 
       {step === "live" && (
         <section className="mt-6 flex flex-1 flex-col items-center gap-6 text-center" aria-labelledby="live-title">
-          <VegaRing state={vs} ticks={phaseTicks(view)} size={190} className="mt-4" />
+          <VegaRing state={paused ? "off" : vs} ticks={phaseTicks(view)} size={190} className="mt-4" />
           <div aria-live="polite">
-            <h1 id="live-title" className={cn("font-heading text-4xl font-semibold", vs === "warning" && "text-amber", vs === "critical" && "text-critical")}>
-              {VEGA_LABEL[vs].replace(/^Vega /, "").replace(/^is /, "").replace(/^raised an? /, "")}
+            <h1 id="live-title" className={cn("font-heading text-4xl font-semibold", !paused && vs === "warning" && "text-amber", !paused && vs === "critical" && "text-critical")}>
+              {paused ? "Paused, not listening" : VEGA_LABEL[vs].replace(/^Vega /, "").replace(/^is /, "").replace(/^raised an? /, "")}
             </h1>
             <p className="mt-2 text-lg text-muted-foreground">
               {view?.phase === "idle" ? <>Say &ldquo;<span className="text-foreground">Vega, start time out</span>&rdquo;</> : `${view?.case.room} · ${view?.case.patient}`}
@@ -305,6 +327,11 @@ export function RoomConsole() {
           </Card>
 
           <div className="flex flex-wrap justify-center gap-3">
+            <Button size="lg" variant={paused ? "default" : "secondary"} onClick={togglePause} aria-pressed={paused} aria-keyshortcuts="M">
+              {paused ? <Mic className="size-4" aria-hidden /> : <MicOff className="size-4" aria-hidden />}
+              {paused ? "Resume listening" : "Pause listening"}
+              <kbd className="ml-1 rounded border border-current/30 px-1.5 font-mono text-xs opacity-70">M</kbd>
+            </Button>
             <Button variant="secondary" size="lg" nativeButton={false} render={<Link href="/board" target="_blank" />}>
               Open wall board <ExternalLink className="size-4" aria-hidden />
             </Button>

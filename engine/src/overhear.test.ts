@@ -98,7 +98,7 @@ describe("overhearing the team (no wake word)", () => {
       "Time out not complete: antibiotic check not confirmed. Anesthesia, was antibiotic prophylaxis given within the last 60 minutes?",
       "Dr. Valdez, this is OR 3. 58-year-old male, left femoral bleed. Tourniquet 22 minutes. Penicillin allergy.",
       "Cefazolin 2 grams, 14:20. Confirm?", "Logged.", "Calling Dr. Valdez, vascular.", "Tourniquet time: 60 minutes.",
-      "Showing the pre-op CT.", "Final count: 9 sponges, 2 needles. Confirm?",
+      "Showing the CT.", "Stopped. Slice 60 of 267.", "Bone window.", "Coronal view.", "Final count: 9 sponges, 2 needles. Confirm?",
     ]) expect(handle(s, said, T0, opts)).toBeNull();
   });
 });

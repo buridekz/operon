@@ -1,0 +1,32 @@
+{
+  "slices": 267,
+  "rows": 176,
+  "cols": 223,
+  "spacing": {
+    "x": 1.953,
+    "y": 1.953,
+    "z": 3.27
+  },
+  "encoding": [
+    [
+      -1000,
+      -150,
+      0,
+      31
+    ],
+    [
+      -150,
+      250,
+      32,
+      191
+    ],
+    [
+      250,
+      1750,
+      192,
+      255
+    ]
+  ],
+  "source": "The Cancer Imaging Archive \u00b7 Soft-tissue-Sarcoma (STS_006) \u00b7 CC BY 3.0",
+  "doi": "https://doi.org/10.7937/K9/TCIA.2015.7GO2GSKS"
+}
