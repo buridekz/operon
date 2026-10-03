@@ -1,18 +1,19 @@
 "use client";
 
-// The wall board: a quiet bento read in a second from across the room. Everything is white and
-// grey; only an alert carries color (system red / yellow), and the focus tile changes with the case.
+// The wall board. Structure: a header (who, where, phase, ARNIE's state, the clock), a chart strip,
+// a full-width alert banner when something is wrong, then the focus panel beside the conversation
+// and the case log. Everything is white and grey on black; only an alert carries color.
+// ARNIE's orb lives on the Room screen; here its state is one dot and one word.
 import type * as React from "react";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useState } from "react";
 import { AlertTriangle, Check, OctagonAlert, PhoneCall, Volume2, VolumeX } from "lucide-react";
-import { ArnieOrb } from "@/components/arnie-orb";
 import { CtViewer, loadCt } from "@/components/ct-viewer";
 import { Logo } from "@/components/vega-ring";
 import { cn } from "@/lib/utils";
 import { mmss, pad2, type ChecklistView, type EngineView, type Severity } from "@/lib/engine";
 import { useEngineState } from "@/lib/use-engine";
 import { useEarcons } from "@/lib/earcons";
-import { MOOD, arnieMood, lastArnieLine } from "@/lib/vega";
+import { MOOD, arnieMood } from "@/lib/vega";
 
 const ALERT_MS = 15_000;
 const sentence = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -28,88 +29,77 @@ function useNow() {
   return now;
 }
 
-function Tile({ area, label, className, children, style }: { area: string; label: string; className?: string; children: React.ReactNode; style?: React.CSSProperties }) {
+const sectionTitle = "text-[15px] font-medium text-label-2";
+
+// ---------- Header ----------
+const STEPS: { key: keyof EngineView["checklists"] | "surgery"; label: string }[] = [
+  { key: "signin", label: "Sign in" },
+  { key: "timeout", label: "Time out" },
+  { key: "surgery", label: "Surgery" },
+  { key: "signout", label: "Sign out" },
+];
+
+function PhaseSteps({ v }: { v: EngineView }) {
+  const done = (k: (typeof STEPS)[number]["key"]) =>
+    k === "surgery" ? v.milestones.closure != null || v.checklists.signout.complete : v.checklists[k].complete;
+  const current = (k: (typeof STEPS)[number]["key"]) => (k === "surgery" ? v.phase === "surgery" : v.phase === k);
   return (
-    <section aria-label={label} style={{ gridArea: area, ...style }} className={cn("tile flex min-h-0 min-w-0 flex-col p-6", className)}>
-      {children}
-    </section>
+    <ol className="flex items-center gap-1 rounded-full bg-tile p-1" aria-label="Case phase">
+      {STEPS.map((s) => (
+        <li
+          key={s.key}
+          aria-current={current(s.key) ? "step" : undefined}
+          className={cn(
+            "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px]",
+            current(s.key) ? "bg-foreground font-semibold text-black" : done(s.key) ? "text-foreground" : "text-label-3",
+          )}
+        >
+          {done(s.key) && !current(s.key) && <Check className="size-3.5" strokeWidth={3} aria-hidden />}
+          {s.label}
+        </li>
+      ))}
+    </ol>
   );
 }
 
-const caption = "text-[15px] text-label-2";
-
-// ---------- Patient ----------
-function PatientTile({ v }: { v: EngineView }) {
-  return (
-    <Tile area="patient" label="Patient" className="justify-center">
-      <h1 className="truncate text-[34px] font-semibold leading-tight tracking-[-0.02em]">{v.case.patient}</h1>
-      <p className="mt-1 text-[17px] text-label-2 max-sm:line-clamp-2 sm:truncate">{v.case.summary}</p>
-      <p className="mt-0.5 text-[17px] text-label-2 max-sm:line-clamp-2 sm:truncate">{v.case.procedure} · {v.case.site}</p>
-    </Tile>
-  );
-}
-
-// ---------- Operation clock ----------
-function ClockTile({ v }: { v: EngineView }) {
-  const op = v.operation;
-  const tq = v.tourniquet;
-  const tqLevel: Severity | null = !tq ? null : tq.seconds >= 7200 ? "critical" : tq.seconds >= 3600 ? "warning" : "info";
-  return (
-    <Tile area="clock" label="Operation" className="justify-center">
-      {!op ? (
-        <>
-          <p className="text-[28px] font-semibold leading-tight text-label-2">Not started</p>
-          <p className="mt-1 text-[13px] text-label-3">&ldquo;ARNIE, start the operation&rdquo;</p>
-        </>
-      ) : (
-        <>
-          <p className="text-[28px] font-semibold leading-tight tracking-[-0.01em]">{sentence(op.duration)}</p>
-          <p className="tnum mt-1 text-[15px] text-label-2">{op.end ? `${op.start} – ${op.end} · done` : `Operating since ${op.start}`}</p>
-        </>
-      )}
-      {tq && (
-        <p className={cn("tnum mt-3 text-[15px]", tqLevel === "critical" ? "text-critical" : tqLevel === "warning" ? "text-amber" : "text-label-2")}>
-          Tourniquet {tq.side} · {mmss(tq.seconds)}
-        </p>
-      )}
-    </Tile>
-  );
-}
-
-// ---------- ARNIE ----------
-const subscribeWidth = (cb: () => void) => { window.addEventListener("resize", cb); return () => window.removeEventListener("resize", cb); };
-/** The board orb follows the screen: 176 px on a laptop, about 250 px on a 1920 wall display. */
-function useOrbSize() {
-  const width = useSyncExternalStore(subscribeWidth, () => window.innerWidth, () => 1440);
-  return Math.round(Math.min(300, Math.max(176, width * 0.13)));
-}
-function ArnieTile({ v, now, echo }: { v: EngineView; now: number | null; echo: boolean }) {
-  const orbSize = useOrbSize();
+function ArnieStatus({ v, now }: { v: EngineView; now: number | null }) {
   const mood = arnieMood(v, now);
-  const m = MOOD[mood];
-  const last = lastArnieLine(v);
-  const heard = [...v.transcript].reverse().find((t) => t.who === "heard");
-  const quiet = mood === "paused" || mood === "off";
+  const dot = mood === "critical" ? "bg-critical" : mood === "warning" ? "bg-amber" : mood === "paused" || mood === "off" ? "bg-label-3" : "bg-teal";
   return (
-    <Tile area="arnie" label="ARNIE" className="items-center text-center">
-      <div className="flex flex-1 flex-col items-center justify-center">
-        <ArnieOrb state={m.orb} size={orbSize} color={m.color} speed={quiet ? 0.25 : 1} label={`ARNIE: ${m.word}`} className={cn("transition-opacity duration-700", quiet && "opacity-35")} />
-        <p className={cn("mt-6 text-[28px] font-semibold tracking-[-0.02em]", mood === "critical" && "text-critical", mood === "warning" && "text-amber", quiet && "text-label-2")} aria-live="polite">
-          {m.word}
-        </p>
-        {!echo && (
-          <p className={cn("mt-3 line-clamp-2 text-[19px] leading-relaxed text-label-2", last?.severity === "critical" && "text-critical", last?.severity === "warning" && "text-amber")}>
-            {last?.text ?? "Ready when you are."}
-          </p>
-        )}
-      </div>
-      {heard && <p className="mt-4 line-clamp-1 w-full text-[13px] text-label-3" title="What ARNIE last heard">&ldquo;{heard.text}&rdquo;</p>}
-    </Tile>
+    <p className="flex items-center gap-2 text-[15px]" aria-live="polite">
+      <span aria-hidden className={cn("size-2.5 rounded-full", dot, (mood === "listening" || mood === "thinking" || mood === "speaking") && "motion-safe:animate-pulse")} />
+      <span className="text-label-2">ARNIE</span>
+      <span className={cn("font-medium", mood === "critical" && "text-critical", mood === "warning" && "text-amber")}>{MOOD[mood].word}</span>
+    </p>
   );
 }
 
-// ---------- Alerts: calm until something is wrong ----------
-function activeAlert(v: EngineView, now: number | null): { sev: Exclude<Severity, "info">; text: string; time?: string } | null {
+// ---------- Chart strip: what ARNIE checks what it hears against ----------
+function ChartStrip({ v }: { v: EngineView }) {
+  const { allergies, orders } = v.case;
+  const chip = "rounded-full bg-tile px-3 py-1 text-[15px]";
+  return (
+    <div className="flex flex-wrap items-center gap-x-8 gap-y-2" aria-label="Chart">
+      <p className="flex flex-wrap items-center gap-2">
+        <span className={sectionTitle}>Allergies</span>
+        {allergies.length
+          ? allergies.map((a) => (
+            <span key={a} className={cn(chip, "inline-flex items-center gap-1.5")}><span aria-hidden className="size-2 rounded-full bg-critical" />{sentence(a)}</span>
+          ))
+          : <span className="text-[15px] text-label-3">None recorded</span>}
+      </p>
+      {orders.length > 0 && (
+        <p className="flex flex-wrap items-center gap-2">
+          <span className={sectionTitle}>Ordered</span>
+          {orders.map((o) => <span key={o} className={chip}>{o}</span>)}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ---------- Alert banner: only when something is wrong ----------
+function activeAlert(v: EngineView, now: number | null): { sev: Exclude<Severity, "info">; text: string } | null {
   const last = [...v.transcript].reverse().find((t) => t.who === "sv" && t.severity && t.severity !== "info");
   if (last && now && now - last.at < ALERT_MS) {
     return { sev: last.severity as Exclude<Severity, "info">, text: sentence(last.text.replace(/^(Caution|Please verify):\s*/, "").replace(/^Logged\.\s*/, "")) };
@@ -118,63 +108,28 @@ function activeAlert(v: EngineView, now: number | null): { sev: Exclude<Severity
   return null;
 }
 
-function AlertTile({ v, now }: { v: EngineView; now: number | null }) {
+function AlertBanner({ v, now }: { v: EngineView; now: number | null }) {
   const a = activeAlert(v, now);
-  const caught = v.log.filter((l) => l.kind === "alert" && /held|flagged/.test(l.text)).length;
-  if (!a) {
-    return (
-      <Tile area="alerts" label="Alerts" className="justify-center">
-        <p className="flex items-center gap-2 text-[22px] font-semibold"><Check className="size-6 text-label-2" aria-hidden />All clear</p>
-        <p className="mt-1 text-[15px] text-label-2">
-          {caught ? `${caught} ${caught === 1 ? "mistake" : "mistakes"} caught this case.` : "Listening for allergy and dose conflicts."}
-        </p>
-      </Tile>
-    );
-  }
+  if (!a) return null;
   const critical = a.sev === "critical";
   const Icon = critical ? OctagonAlert : AlertTriangle;
   return (
-    <Tile
-      area="alerts"
-      label={critical ? "Critical alert" : "Warning"}
-      className={cn("tile-alert-in justify-center", critical ? "text-white" : "text-black")}
+    <div
+      role="alert"
+      key={a.text}
+      className={cn("tile tile-alert-in flex items-center gap-5 px-7 py-5", critical ? "text-white" : "text-black")}
       style={{ background: critical ? "var(--critical)" : "var(--amber)" }}
     >
-      <div role="alert" key={a.text}>
-        <p className="flex items-center gap-2 text-[19px] font-bold"><Icon className="size-5" aria-hidden />{critical ? "Critical" : "Warning"}</p>
-        <p className="mt-2 line-clamp-4 text-[24px] font-semibold leading-snug tracking-[-0.01em]">{a.text}</p>
+      <Icon className="size-10 shrink-0" aria-hidden />
+      <div className="min-w-0">
+        <p className="text-[19px] font-bold">{critical ? "Critical" : "Warning"}</p>
+        <p className="text-[28px] font-semibold leading-tight tracking-[-0.01em]">{a.text}</p>
       </div>
-    </Tile>
+    </div>
   );
 }
 
-// ---------- Chart: what ARNIE checks what it hears against ----------
-function ChartTile({ v }: { v: EngineView }) {
-  const labs = Object.entries(v.case.preop).filter(([, val]) => val);
-  const rows: [string, React.ReactNode][] = [
-    ["Allergies", v.case.allergies.length
-      ? <span className="flex flex-wrap justify-end gap-x-3">{v.case.allergies.map((a) => (
-        <span key={a} className="inline-flex items-center gap-1.5"><span aria-hidden className="size-2 rounded-full bg-critical" />{sentence(a)}</span>
-      ))}</span>
-      : "None recorded"],
-    ["Ordered", v.case.orders.length ? v.case.orders.join(", ") : "None recorded"],
-    ...labs.map(([k, val]) => [`Pre-op ${k}`, val] as [string, React.ReactNode]),
-  ];
-  return (
-    <Tile area="chart" label="Chart" className="justify-center">
-      <dl className="divide-y divide-white/[0.08]">
-        {rows.map(([k, val]) => (
-          <div key={k} className="flex items-baseline justify-between gap-4 py-2 first:pt-0 last:pb-0">
-            <dt className={caption}>{k}</dt>
-            <dd className="text-right text-[17px]">{val}</dd>
-          </div>
-        ))}
-      </dl>
-    </Tile>
-  );
-}
-
-// ---------- Focus: the one thing that matters now ----------
+// ---------- Focus panels ----------
 function ChecklistFocus({ list }: { list: ChecklistView }) {
   return (
     <div className="flex h-full flex-col">
@@ -230,29 +185,71 @@ function SummaryFocus({ v }: { v: EngineView }) {
   );
 }
 
-function TimelineFocus({ v }: { v: EngineView }) {
-  const rows = v.log.slice(-8);
-  const c = v.counts;
+/** One cell of the surgery panel: a quiet label, then the value. */
+function Cell({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
   return (
-    <div className="flex h-full flex-col">
-      <h2 className="text-[34px] font-semibold tracking-[-0.02em]">Case log</h2>
-      <ol className="mt-4 flex-1 divide-y divide-white/[0.08]">
-        {rows.map((l) => {
-          const sev = l.severity ?? (l.kind === "alert" ? "warning" : null);
-          return (
-            <li key={`${l.at}-${l.text}`} className="flex items-baseline gap-5 py-3">
-              <span className="tnum w-14 shrink-0 text-[15px] text-label-3">{l.time}</span>
-              <span className={cn("text-[20px]", sev === "critical" && "text-critical", sev === "warning" && "text-amber")}>{l.text}</span>
-            </li>
-          );
-        })}
-      </ol>
-      {c.status !== "none" && (
-        <p className={cn("tnum mt-4 text-[17px]", c.status === "mismatch" ? "text-critical" : "text-label-2")}>
-          Sponges {c.opened.sponge} opened{c.final ? ` · ${c.final.sponge} counted` : ""} · needles {c.opened.needle}
-          {c.status === "reconciled" ? " · reconciled" : ""}
-        </p>
-      )}
+    <div className={cn("flex min-w-0 flex-col justify-center p-6", className)}>
+      <p className={sectionTitle}>{label}</p>
+      <div className="mt-2">{children}</div>
+    </div>
+  );
+}
+
+function SurgeryFocus({ v }: { v: EngineView }) {
+  const op = v.operation;
+  const tq = v.tourniquet;
+  const tqLevel: Severity | null = !tq ? null : tq.seconds >= 7200 ? "critical" : tq.seconds >= 3600 ? "warning" : "info";
+  const c = v.counts;
+  const big = "tnum text-[44px] font-semibold leading-none tracking-[-0.03em]";
+  const quiet = "text-[22px] text-label-3";
+  return (
+    <div className="-m-6 grid h-[calc(100%+3rem)] grid-cols-1 divide-white/[0.08] sm:grid-cols-2 sm:grid-rows-2 max-sm:divide-y sm:[&>*:nth-child(-n+2)]:border-b sm:[&>*:nth-child(odd)]:border-r sm:[&>*]:border-white/[0.08]">
+      <Cell label="Operation">
+        {op ? (
+          <>
+            <p className={big}>{sentence(op.duration)}</p>
+            <p className="tnum mt-2 text-[17px] text-label-2">{op.end ? `${op.start} – ${op.end} · done` : `Since ${op.start}`}</p>
+          </>
+        ) : (
+          <p className={quiet}>Not started</p>
+        )}
+      </Cell>
+      <Cell label={tq ? `Tourniquet · ${tq.side}` : "Tourniquet"}>
+        {tq ? (
+          <>
+            <p className={cn(big, tqLevel === "critical" && "text-critical", tqLevel === "warning" && "text-amber")}>{mmss(tq.seconds)}</p>
+            <p className="mt-2 text-[17px] text-label-2">Alerts at 60, 90 and 120 minutes</p>
+          </>
+        ) : (
+          <p className={quiet}>Not on</p>
+        )}
+      </Cell>
+      <Cell label="Counts">
+        {c.status === "none" ? (
+          <p className={quiet}>Nothing opened</p>
+        ) : (
+          <>
+            <p className={cn("tnum text-[28px] font-semibold", c.status === "mismatch" && "text-critical")}>
+              {c.final ? `${c.final.sponge} of ${c.opened.sponge} sponges` : `${c.opened.sponge} sponges opened`}
+            </p>
+            <p className={cn("mt-1 text-[17px]", c.status === "mismatch" ? "text-critical" : "text-label-2")}>
+              {c.status === "reconciled" ? "Reconciled" : c.status === "mismatch" ? c.missing.join(", ") : "Final count pending"}
+              {c.opened.needle ? ` · ${c.opened.needle} needles` : ""}
+            </p>
+          </>
+        )}
+      </Cell>
+      <Cell label="Implants">
+        {v.implants.length === 0 ? (
+          <p className={quiet}>None recorded</p>
+        ) : (
+          <ul className="space-y-1">
+            {v.implants.map((im) => (
+              <li key={`${im.time}-${im.name}`} className="flex gap-3 text-[19px]"><span className="tnum text-label-3">{im.time}</span>{im.name}</li>
+            ))}
+          </ul>
+        )}
+      </Cell>
     </div>
   );
 }
@@ -266,28 +263,88 @@ function ReadyFocus() {
   );
 }
 
-type FocusKey = "ct" | "consult" | "signin" | "timeout" | "signout" | "summary" | "log" | "ready";
+type FocusKey = "ct" | "consult" | "signin" | "timeout" | "signout" | "summary" | "surgery" | "ready";
 function focusOf(v: EngineView): FocusKey {
   if (v.imaging?.visible) return "ct";
   if (v.consult && v.consult.state !== "ended") return "consult";
   if (v.phase === "signin" || v.phase === "timeout" || v.phase === "signout") return v.phase;
   if (v.summary) return "summary";
-  return v.log.length ? "log" : "ready";
+  if (v.operation || v.phase === "surgery" || v.phase === "done" || v.tourniquet || v.counts.status !== "none") return "surgery";
+  return "ready";
 }
 
-function FocusTile({ v }: { v: EngineView }) {
+function Focus({ v }: { v: EngineView }) {
   const key = focusOf(v);
   const body: React.ReactNode =
     key === "ct" ? <div className="mx-auto aspect-square h-full max-h-full max-w-full"><CtViewer imaging={v.imaging!} /></div>
       : key === "consult" ? <ConsultFocus v={v} />
         : key === "signin" || key === "timeout" || key === "signout" ? <ChecklistFocus list={v.checklists[key]} />
           : key === "summary" ? <SummaryFocus v={v} />
-            : key === "log" ? <TimelineFocus v={v} />
+            : key === "surgery" ? <SurgeryFocus v={v} />
               : <ReadyFocus />;
   return (
-    <Tile area="focus" label="Focus" className={cn(key === "ct" && "bg-black! p-3")}>
+    <section aria-label="Focus" className={cn("tile min-h-[420px] overflow-hidden p-6 lg:min-h-0", key === "ct" && "bg-black! p-3")}>
       <div key={key} className="focus-in h-full min-h-0">{body}</div>
-    </Tile>
+    </section>
+  );
+}
+
+// ---------- Right column: the conversation, then the case log ----------
+function Conversation({ v }: { v: EngineView }) {
+  const lines = v.transcript.slice(-3);
+  return (
+    <section aria-label="Conversation" className="tile flex-none p-6">
+      <h2 className={sectionTitle}>Conversation</h2>
+      {lines.length === 0 ? (
+        <p className="mt-3 text-[17px] text-label-3">Waiting for the room…</p>
+      ) : (
+        <ol className="mt-3 space-y-3" aria-live="polite">
+          {lines.map((t) => {
+            const sev = t.severity ?? "info";
+            return (
+              <li key={`${t.at}-${t.text}`}>
+                <p className="text-[13px] text-label-3">{t.who === "heard" ? "Heard" : "ARNIE"}</p>
+                <p
+                  className={cn(
+                    "line-clamp-2 text-[17px] leading-snug",
+                    t.who === "heard" ? "text-label-2" : "text-foreground",
+                    t.who === "sv" && sev === "critical" && "text-critical",
+                    t.who === "sv" && sev === "warning" && "text-amber",
+                  )}
+                >
+                  {t.text}
+                </p>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </section>
+  );
+}
+
+function CaseLog({ v }: { v: EngineView }) {
+  // Newest first: when the tile is full, the oldest entries are the ones that drop off.
+  const rows = v.log.slice(-10).reverse();
+  return (
+    <section aria-label="Case log" className="tile flex min-h-0 flex-1 flex-col p-6">
+      <h2 className={sectionTitle}>Case log · newest first</h2>
+      {rows.length === 0 ? (
+        <p className="mt-3 text-[17px] text-label-3">Nothing logged yet.</p>
+      ) : (
+        <ol className="mt-2 min-h-0 flex-1 divide-y divide-white/[0.08] overflow-hidden [mask-image:linear-gradient(to_bottom,black_85%,transparent)]">
+          {rows.map((l) => {
+            const sev = l.severity ?? (l.kind === "alert" ? "warning" : null);
+            return (
+              <li key={`${l.at}-${l.text}`} className="flex items-baseline gap-4 py-2.5">
+                <span className="tnum w-12 shrink-0 text-[15px] text-label-3">{l.time}</span>
+                <span className={cn("text-[17px] leading-snug", sev === "critical" && "text-critical", sev === "warning" && "text-amber")}>{l.text}</span>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </section>
   );
 }
 
@@ -304,51 +361,46 @@ export function Board() {
     return <main className="grid flex-1 place-items-center text-[17px] text-label-2">Connecting to the Operon engine…</main>;
   }
 
-  const alerting = !!activeAlert(v, now);
-  // The ARNIE tile stays quiet when another tile already shows its words (the alert, the summary).
-  const echo = alerting || focusOf(v) === "summary" || focusOf(v) === "consult";
-
   return (
-    <main className="flex min-h-dvh w-full flex-1 flex-col gap-4 p-4 sm:p-6 lg:h-dvh lg:min-h-0 lg:flex-none lg:overflow-hidden">
-      <header className="flex items-center justify-between gap-4 px-2">
+    <main className="flex min-h-dvh w-full flex-1 flex-col gap-5 p-4 sm:p-6 lg:h-dvh lg:min-h-0 lg:flex-none lg:overflow-hidden">
+      <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 px-1">
         <div className="flex min-w-0 items-center gap-4">
           <Logo size={24} />
-          <span aria-hidden className="h-5 w-px bg-white/15 max-sm:hidden" />
-          <p className="truncate text-[17px] font-medium max-sm:hidden">{v.case.room}</p>
+          <span aria-hidden className="h-6 w-px bg-white/15 max-sm:hidden" />
+          <h1 className="min-w-0 truncate text-[20px]">
+            <span className="font-semibold">{v.case.room}</span>
+            <span className="text-label-2"> · {v.case.patient}</span>
+            <span className="text-label-2 max-lg:hidden"> · {v.case.procedure}</span>
+          </h1>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+          <PhaseSteps v={v} />
+          <ArnieStatus v={v} now={now} />
           <button
             type="button"
             onClick={() => (audio ? (audio.close(), setAudio(null)) : setAudio(new AudioContext()))}
             aria-pressed={!!audio}
             aria-label={audio ? "Alert tones on" : "Alert tones off"}
             title={audio ? "Alert tones on" : "Turn on alert tones"}
-            className="inline-flex h-9 items-center gap-2 rounded-full bg-tile px-3.5 text-[13px] text-label-2 transition-colors hover:text-foreground"
+            className="inline-flex size-9 items-center justify-center rounded-full bg-tile text-label-2 transition-colors hover:text-foreground"
           >
             {audio ? <Volume2 className="size-4" aria-hidden /> : <VolumeX className="size-4" aria-hidden />}
-            <span className="hidden sm:inline">{audio ? "Tones on" : "Tones off"}</span>
           </button>
           <span aria-label={connected ? "Connected" : "Reconnecting"} className={cn("size-2 rounded-full", connected ? "bg-teal" : "bg-amber")} />
           <span className="tnum text-[34px] font-semibold tracking-[-0.02em]">{d ? `${pad2(d.getHours())}:${pad2(d.getMinutes())}` : "--:--"}</span>
         </div>
       </header>
 
-      <div
-        className={cn(
-          "grid min-h-0 flex-1 gap-4",
-          "[grid-template-areas:'patient'_'arnie'_'alerts'_'clock'_'focus'_'chart'] grid-cols-1",
-          "md:grid-cols-2 md:[grid-template-areas:'patient_patient'_'arnie_alerts'_'arnie_clock'_'focus_focus'_'chart_chart']",
-          "lg:grid-cols-[1fr_1fr_0.95fr_1.05fr] transition-[grid-template-rows] duration-500 ease-out",
-          alerting ? "lg:grid-rows-[auto_minmax(0,1.3fr)_minmax(0,0.9fr)]" : "lg:grid-rows-[auto_minmax(0,1fr)_minmax(0,1fr)]",
-          "lg:[grid-template-areas:'patient_patient_clock_arnie'_'focus_focus_alerts_arnie'_'focus_focus_chart_arnie']",
-        )}
-      >
-        <PatientTile v={v} />
-        <ClockTile v={v} />
-        <ArnieTile v={v} now={now} echo={echo} />
-        <FocusTile v={v} />
-        <AlertTile v={v} now={now} />
-        <ChartTile v={v} />
+      <ChartStrip v={v} />
+
+      <AlertBanner v={v} now={now} />
+
+      <div className="grid min-h-0 flex-1 gap-5 lg:grid-cols-[2fr_1fr]">
+        <Focus v={v} />
+        <aside className="flex min-h-0 flex-col gap-5" aria-label="Conversation and case log">
+          <Conversation v={v} />
+          <CaseLog v={v} />
+        </aside>
       </div>
     </main>
   );
