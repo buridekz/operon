@@ -271,6 +271,28 @@ function Hero({ v }: { v: EngineView }) {
   return <IdleHero />;
 }
 
+// What Vega checks what it hears against: the allergies and medication orders on the chart.
+function ChartStrip({ v }: { v: EngineView }) {
+  const { allergies, orders } = v.case;
+  const label = "text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground";
+  return (
+    <div className="flex flex-wrap items-center gap-x-8 gap-y-2 text-sm" aria-label="Chart">
+      <p className="flex flex-wrap items-center gap-2">
+        <span className={label}>Allergies</span>
+        {allergies.length
+          ? allergies.map((a) => <span key={a} className="rounded-md bg-critical-soft px-2 py-0.5 font-medium text-critical">{a}</span>)
+          : <span className="text-muted-foreground">None recorded</span>}
+      </p>
+      {orders.length > 0 && (
+        <p className="flex flex-wrap items-center gap-2">
+          <span className={label}>Ordered</span>
+          {orders.map((o) => <span key={o} className="rounded-md bg-secondary px-2 py-0.5 text-foreground">{o}</span>)}
+        </p>
+      )}
+    </div>
+  );
+}
+
 // ---------- Board ----------
 export function Board() {
   const { view: v, connected } = useEngineState();
@@ -306,6 +328,8 @@ export function Board() {
           <span className="font-mono text-4xl font-semibold tabular-nums">{d ? `${pad2(d.getHours())}:${pad2(d.getMinutes())}` : "--:--"}</span>
         </div>
       </header>
+
+      <ChartStrip v={v} />
 
       <AlertBanner v={v} now={now} />
 

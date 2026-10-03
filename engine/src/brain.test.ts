@@ -26,7 +26,7 @@ describe("wake word: Vega", () => {
       "Surgeon, read back the potassium",
       "Sir John, read back the potassium",
       "Pass the vegetable broth, read back the potassium",
-      "She's vegan, give ampicillin",
+      "She's vegan, give her the CT",
       "The surgeon wants the tourniquet on, left thigh",
     ]) expect(handle(s, heard, T0, opts)).toBeNull();
     expect(s.pending).toBeNull();

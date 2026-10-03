@@ -3,9 +3,10 @@
 import "dotenv/config";
 import express, { type Response } from "express";
 import cors from "cors";
-import { createState, handle, applyIntent, tick, consultJoined, endConsult, view, signRecord, severityOf, SAY_AGAIN, type CaseSetup, type Opts, type Severity, type Turn } from "./brain.js";
+import { createState, handle, applyIntent, applyScreen, tick, consultJoined, endConsult, view, signRecord, severityOf, SAY_AGAIN, type CaseSetup, type Opts, type Severity, type Turn } from "./brain.js";
 import { rtcRtmToken, startAgent, speak, stopAgent, type AgoraConfig } from "./agora.js";
 import { createIntentParser } from "./intent.js";
+import { createDrugScreener } from "./drugscreen.js";
 import { TurnTracker } from "./turns.js";
 
 const cfg: AgoraConfig = {
@@ -20,11 +21,13 @@ const cfg: AgoraConfig = {
   asrLanguage: process.env.ASR_LANGUAGE || "en-US",
   ttsPreset: process.env.TTS_PRESET || "openai_tts_1",
   ttsVoice: process.env.TTS_VOICE || "coral",
-  speakerLock: process.env.SPEAKER_LOCK !== "off",
+  speakerLock: process.env.SPEAKER_LOCK === "on",
 };
 const port = Number(process.env.PORT || 3000);
 const opts: Opts = { minuteMs: Number(process.env.DEMO_MINUTE_MS || 60000), alertMinutes: [60, 90, 120] };
 const parseIntent = createIntentParser(process.env.OPENAI_API_KEY, process.env.OPENAI_MODEL || "gpt-5.4-mini");
+const screenDrug = createDrugScreener(process.env.OPENAI_API_KEY, process.env.OPENAI_MODEL || "gpt-5.4-mini");
+let lastScreenAt = 0;
 
 type Line = { who: "heard" | "sv"; text: string; severity?: Severity; at: number; via?: "rules" | "llm" };
 let state = createState();
@@ -55,6 +58,13 @@ async function respond(heard: string): Promise<{ reply: string | null; via: "rul
   const now = Date.now();
   const turn: Turn = handle(state, heard, now, opts);
   if (turn === null || typeof turn === "string") return { reply: turn, via: "rules" };
+  if ("screen" in turn) { // room speech naming a drug that isn't in our list
+    if (!screenDrug || Date.now() - lastScreenAt < 3000) return { reply: null, via: "rules" };
+    lastScreenAt = Date.now();
+    const hit = await screenDrug(turn.screen, state.case.allergies);
+    console.log(`[screen] "${turn.screen}" -> ${hit ? JSON.stringify(hit) : "no conflict flagged"}`);
+    return { reply: hit ? applyScreen(state, hit.drug, hit.allergy, Date.now()) : null, via: "llm" };
+  }
   if (!parseIntent) return { reply: SAY_AGAIN, via: "rules" };
   const intent = await parseIntent(turn.parse);
   console.log(`[llm] "${turn.parse}" -> ${JSON.stringify(intent)}`);
