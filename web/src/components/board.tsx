@@ -3,7 +3,7 @@
 // The wall board: a quiet bento read in a second from across the room. Everything is white and
 // grey; only an alert carries color (system red / yellow), and the focus tile changes with the case.
 import type * as React from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { AlertTriangle, Check, OctagonAlert, PhoneCall, Volume2, VolumeX } from "lucide-react";
 import { ArnieOrb } from "@/components/arnie-orb";
 import { CtViewer, loadCt } from "@/components/ct-viewer";
@@ -43,8 +43,8 @@ function PatientTile({ v }: { v: EngineView }) {
   return (
     <Tile area="patient" label="Patient" className="justify-center">
       <h1 className="truncate text-[34px] font-semibold leading-tight tracking-[-0.02em]">{v.case.patient}</h1>
-      <p className="mt-1 truncate text-[17px] text-label-2">{v.case.summary}</p>
-      <p className="mt-0.5 truncate text-[17px] text-label-2">{v.case.procedure} · {v.case.site}</p>
+      <p className="mt-1 text-[17px] text-label-2 max-sm:line-clamp-2 sm:truncate">{v.case.summary}</p>
+      <p className="mt-0.5 text-[17px] text-label-2 max-sm:line-clamp-2 sm:truncate">{v.case.procedure} · {v.case.site}</p>
     </Tile>
   );
 }
@@ -77,7 +77,14 @@ function ClockTile({ v }: { v: EngineView }) {
 }
 
 // ---------- ARNIE ----------
-function ArnieTile({ v, now }: { v: EngineView; now: number | null }) {
+const subscribeWidth = (cb: () => void) => { window.addEventListener("resize", cb); return () => window.removeEventListener("resize", cb); };
+/** The board orb follows the screen: 176 px on a laptop, about 250 px on a 1920 wall display. */
+function useOrbSize() {
+  const width = useSyncExternalStore(subscribeWidth, () => window.innerWidth, () => 1440);
+  return Math.round(Math.min(300, Math.max(176, width * 0.13)));
+}
+function ArnieTile({ v, now, echo }: { v: EngineView; now: number | null; echo: boolean }) {
+  const orbSize = useOrbSize();
   const mood = arnieMood(v, now);
   const m = MOOD[mood];
   const last = lastArnieLine(v);
@@ -86,13 +93,15 @@ function ArnieTile({ v, now }: { v: EngineView; now: number | null }) {
   return (
     <Tile area="arnie" label="ARNIE" className="items-center text-center">
       <div className="flex flex-1 flex-col items-center justify-center">
-        <ArnieOrb state={m.orb} size={176} color={m.color} speed={quiet ? 0.25 : 1} label={`ARNIE: ${m.word}`} className={cn("transition-opacity duration-700", quiet && "opacity-35")} />
+        <ArnieOrb state={m.orb} size={orbSize} color={m.color} speed={quiet ? 0.25 : 1} label={`ARNIE: ${m.word}`} className={cn("transition-opacity duration-700", quiet && "opacity-35")} />
         <p className={cn("mt-6 text-[28px] font-semibold tracking-[-0.02em]", mood === "critical" && "text-critical", mood === "warning" && "text-amber", quiet && "text-label-2")} aria-live="polite">
           {m.word}
         </p>
-        <p className={cn("mt-3 line-clamp-4 text-[19px] leading-relaxed text-label-2", last?.severity === "critical" && "text-critical", last?.severity === "warning" && "text-amber")}>
-          {last?.text ?? "Ready when you are."}
-        </p>
+        {!echo && (
+          <p className={cn("mt-3 line-clamp-2 text-[19px] leading-relaxed text-label-2", last?.severity === "critical" && "text-critical", last?.severity === "warning" && "text-amber")}>
+            {last?.text ?? "Ready when you are."}
+          </p>
+        )}
       </div>
       {heard && <p className="mt-4 line-clamp-1 w-full text-[13px] text-label-3" title="What ARNIE last heard">&ldquo;{heard.text}&rdquo;</p>}
     </Tile>
@@ -132,7 +141,7 @@ function AlertTile({ v, now }: { v: EngineView; now: number | null }) {
       style={{ background: critical ? "var(--critical)" : "var(--amber)" }}
     >
       <div role="alert" key={a.text}>
-        <p className="flex items-center gap-2 text-[17px] font-semibold"><Icon className="size-5" aria-hidden />{critical ? "Critical" : "Warning"}</p>
+        <p className="flex items-center gap-2 text-[19px] font-bold"><Icon className="size-5" aria-hidden />{critical ? "Critical" : "Warning"}</p>
         <p className="mt-2 line-clamp-4 text-[24px] font-semibold leading-snug tracking-[-0.01em]">{a.text}</p>
       </div>
     </Tile>
@@ -202,7 +211,7 @@ function ConsultFocus({ v }: { v: EngineView }) {
     <div className="flex h-full flex-col justify-center">
       <PhoneCall className={cn("size-10", c.state === "ringing" && "motion-safe:animate-pulse")} aria-hidden />
       <h2 className="mt-6 text-[44px] font-semibold leading-tight tracking-[-0.03em]">{c.doctor}</h2>
-      <p className="mt-1 text-[20px] capitalize text-label-2">{c.specialty} · {c.state === "ringing" ? "calling…" : "on the line"}</p>
+      <p className="mt-1 text-[20px] text-label-2">{sentence(c.specialty)} · {c.state === "ringing" ? "calling…" : "on the line"}</p>
       <p className="mt-8 max-w-2xl text-[22px] leading-relaxed text-label-2">
         {brief ? brief.text : "ARNIE will brief them from the chart when they answer."}
       </p>
@@ -257,21 +266,24 @@ function ReadyFocus() {
   );
 }
 
+type FocusKey = "ct" | "consult" | "signin" | "timeout" | "signout" | "summary" | "log" | "ready";
+function focusOf(v: EngineView): FocusKey {
+  if (v.imaging?.visible) return "ct";
+  if (v.consult && v.consult.state !== "ended") return "consult";
+  if (v.phase === "signin" || v.phase === "timeout" || v.phase === "signout") return v.phase;
+  if (v.summary) return "summary";
+  return v.log.length ? "log" : "ready";
+}
+
 function FocusTile({ v }: { v: EngineView }) {
-  let key = "ready";
-  let body: React.ReactNode = <ReadyFocus />;
-  if (v.imaging?.visible) {
-    key = "ct";
-    body = <div className="mx-auto aspect-square h-full max-h-full max-w-full"><CtViewer imaging={v.imaging} /></div>;
-  } else if (v.consult && v.consult.state !== "ended") {
-    key = "consult"; body = <ConsultFocus v={v} />;
-  } else if (v.phase === "signin" || v.phase === "timeout" || v.phase === "signout") {
-    key = v.phase; body = <ChecklistFocus list={v.checklists[v.phase]} />;
-  } else if (v.summary) {
-    key = "summary"; body = <SummaryFocus v={v} />;
-  } else if (v.log.length) {
-    key = "log"; body = <TimelineFocus v={v} />;
-  }
+  const key = focusOf(v);
+  const body: React.ReactNode =
+    key === "ct" ? <div className="mx-auto aspect-square h-full max-h-full max-w-full"><CtViewer imaging={v.imaging!} /></div>
+      : key === "consult" ? <ConsultFocus v={v} />
+        : key === "signin" || key === "timeout" || key === "signout" ? <ChecklistFocus list={v.checklists[key]} />
+          : key === "summary" ? <SummaryFocus v={v} />
+            : key === "log" ? <TimelineFocus v={v} />
+              : <ReadyFocus />;
   return (
     <Tile area="focus" label="Focus" className={cn(key === "ct" && "bg-black! p-3")}>
       <div key={key} className="focus-in h-full min-h-0">{body}</div>
@@ -291,6 +303,10 @@ export function Board() {
   if (!v) {
     return <main className="grid flex-1 place-items-center text-[17px] text-label-2">Connecting to the Operon engine…</main>;
   }
+
+  const alerting = !!activeAlert(v, now);
+  // The ARNIE tile stays quiet when another tile already shows its words (the alert, the summary).
+  const echo = alerting || focusOf(v) === "summary" || focusOf(v) === "consult";
 
   return (
     <main className="flex min-h-dvh w-full flex-1 flex-col gap-4 p-4 sm:p-6 lg:h-dvh lg:min-h-0 lg:flex-none lg:overflow-hidden">
@@ -322,13 +338,14 @@ export function Board() {
           "grid min-h-0 flex-1 gap-4",
           "[grid-template-areas:'patient'_'arnie'_'alerts'_'clock'_'focus'_'chart'] grid-cols-1",
           "md:grid-cols-2 md:[grid-template-areas:'patient_patient'_'arnie_alerts'_'arnie_clock'_'focus_focus'_'chart_chart']",
-          "lg:grid-cols-[1fr_1fr_0.95fr_1.05fr] lg:grid-rows-[auto_minmax(0,1fr)_minmax(0,1fr)]",
+          "lg:grid-cols-[1fr_1fr_0.95fr_1.05fr] transition-[grid-template-rows] duration-500 ease-out",
+          alerting ? "lg:grid-rows-[auto_minmax(0,1.3fr)_minmax(0,0.9fr)]" : "lg:grid-rows-[auto_minmax(0,1fr)_minmax(0,1fr)]",
           "lg:[grid-template-areas:'patient_patient_clock_arnie'_'focus_focus_alerts_arnie'_'focus_focus_chart_arnie']",
         )}
       >
         <PatientTile v={v} />
         <ClockTile v={v} />
-        <ArnieTile v={v} now={now} />
+        <ArnieTile v={v} now={now} echo={echo} />
         <FocusTile v={v} />
         <AlertTile v={v} now={now} />
         <ChartTile v={v} />
