@@ -8,7 +8,7 @@ const GAP = 5000;
 const intent = (p: Partial<Intent>): Intent => ({ ...EMPTY_INTENT, ...p });
 
 function runTimeout(s: State) {
-  handle(s, "Vega, start time out", T0, opts);
+  handle(s, "ARNIE, start time out", T0, opts);
   handle(s, "Juan Cruz, exploration of the left femoral. Confirmed.", T0 + GAP, opts);
   return T0 + GAP;
 }
@@ -67,7 +67,7 @@ describe("overhearing the team (no wake word)", () => {
     expect(s.checklist!.index).toBe(1); // not taken as the checklist answer
 
     const c = chart();
-    handle(c, "Vega, call vascular", T0, opts);
+    handle(c, "ARNIE, call vascular", T0, opts);
     consultJoined(c, T0, opts);
     expect(handle(c, "Giving ampicillin", T0 + MIN, opts)).toMatch(/^Caution: penicillin allergy/);
     expect(handle(c, "What do you see on the angiogram?", T0 + MIN, opts)).toBeNull();
@@ -88,7 +88,7 @@ describe("overhearing the team (no wake word)", () => {
     expect(s.log.at(-1)).toMatchObject({ kind: "alert", severity: "warning" });
   });
 
-  test("Vega's own sentences never trigger it (the mic may hear the speaker)", () => {
+  test("ARNIE's own sentences never trigger it (the mic may hear the speaker)", () => {
     const s = chart();
     for (const said of [
       "Caution: penicillin allergy recorded at sign-in. Ampicillin not logged.",
@@ -106,21 +106,21 @@ describe("overhearing the team (no wake word)", () => {
 describe("doses on commanded drugs", () => {
   test("the read-back includes the dose and the log keeps it", () => {
     const s = createState({ orders: "cefazolin 2 g" });
-    expect(handle(s, "Vega, give cefazolin 2 grams", T0, opts)).toBe("Cefazolin 2 grams, 14:20. Confirm?");
+    expect(handle(s, "ARNIE, give cefazolin 2 grams", T0, opts)).toBe("Cefazolin 2 grams, 14:20. Confirm?");
     expect(handle(s, "Confirmed", T0, opts)).toBe("Logged.");
     expect(s.log.at(-1)).toMatchObject({ kind: "drug", drug: "cefazolin", text: "Cefazolin 2 grams given" });
   });
 
   test("a different dose than ordered is held, not logged", () => {
     const s = createState({ orders: "cefazolin 2 g" });
-    expect(handle(s, "Vega, giving cefazolin twenty grams", T0, opts)).toMatch(/^Caution: cefazolin is ordered at 2 grams in the case record\. 20 grams was stated/);
+    expect(handle(s, "ARNIE, giving cefazolin twenty grams", T0, opts)).toMatch(/^Caution: cefazolin is ordered at 2 grams in the case record\. 20 grams was stated/);
     expect(s.pending).toBeNull();
     expect(s.log.at(-1)).toMatchObject({ kind: "alert", severity: "critical" });
   });
 
   test("a dose with no order on file is just read back", () => {
     const s = createState();
-    expect(handle(s, "Vega, give heparin 5000 units", T0, opts)).toBe("Heparin 5000 units, 14:20. Confirm?");
+    expect(handle(s, "ARNIE, give heparin 5000 units", T0, opts)).toBe("Heparin 5000 units, 14:20. Confirm?");
   });
 
   test("the LLM path carries the dose too", () => {

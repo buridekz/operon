@@ -1,5 +1,5 @@
 // Sound-alike cleanup for what speech recognition hears, before the rules read a command.
-// Found in live rehearsal: "Vega, go to the knee" came through as "Vega, got to the name", and "CT"
+// Found in live rehearsal: "ARNIE, go to the knee" came through as "ARNIE, got to the name", and "CT"
 // as "city". Each fix is either a word that never means anything else in this room ("city", "colonel")
 // or is only applied inside the phrase it belongs to ("go to the name" -> "go to the knee"), so
 // "what's the patient's name" is left alone. Case is kept, so implant names like "PTFE" survive.
@@ -51,7 +51,7 @@ const FIXES: Fix[] = [
 ];
 
 /** Sound-alikes fixed. Only used for parsing commands; the board still shows what was heard,
- *  and answers to Vega's questions ("Confirmed") are never rewritten. */
+ *  and answers to ARNIE's questions ("Confirmed") are never rewritten. */
 export function normalizeHeard(text: string): string {
   let t = ` ${text} `;
   for (const [re, to] of FIXES) t = t.replace(re, to);

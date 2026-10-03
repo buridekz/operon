@@ -5,7 +5,7 @@ import { AlertTriangle, CheckCircle2, OctagonAlert, PhoneCall, Volume2, VolumeX 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CtViewer, loadCt } from "@/components/ct-viewer";
-import { Logo, VegaRing } from "@/components/vega-ring";
+import { Logo, ArnieRing } from "@/components/vega-ring";
 import { cn } from "@/lib/utils";
 import { mmss, pad2, type ChecklistView, type EngineView, type Severity } from "@/lib/engine";
 import { useEngineState } from "@/lib/use-engine";
@@ -182,14 +182,18 @@ function SurgeryHero({ v }: { v: EngineView }) {
       </Card>
 
       <Card>
-        <CardHeader><CardTitle className="text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">Milestones</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-2 gap-4">
-          {(["incision", "closure"] as const).map((m) => (
-            <div key={m}>
-              <p className="text-sm capitalize text-muted-foreground">{m}</p>
-              <p className="font-mono text-3xl font-semibold">{v.milestones[m] ?? "--:--"}</p>
+        <CardHeader><CardTitle className="text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">Operation</CardTitle></CardHeader>
+        <CardContent className="grid grid-cols-3 gap-4">
+          {([["Start", v.operation?.start], ["End", v.operation?.end]] as const).map(([label, time]) => (
+            <div key={label}>
+              <p className="text-sm text-muted-foreground">{label}</p>
+              <p className="font-mono text-3xl font-semibold">{time ?? "--:--"}</p>
             </div>
           ))}
+          <div>
+            <p className="text-sm text-muted-foreground">{v.operation?.end ? "Duration" : "Running"}</p>
+            <p className="text-xl font-semibold leading-tight">{v.operation?.duration ?? "--"}</p>
+          </div>
         </CardContent>
       </Card>
 
@@ -236,7 +240,7 @@ function ConsultHero({ v }: { v: EngineView }) {
             {brief.text}
           </blockquote>
         ) : (
-          <p className="text-xl text-muted-foreground">The specialist&apos;s phone is ringing. Vega will brief them when they answer.</p>
+          <p className="text-xl text-muted-foreground">The specialist&apos;s phone is ringing. ARNIE will brief them when they answer.</p>
         )}
       </CardContent>
     </Card>
@@ -248,7 +252,7 @@ function IdleHero() {
     <Card className="h-full justify-center">
       <CardContent className="space-y-3 text-center">
         <p className="font-heading text-4xl font-semibold">Ready</p>
-        <p className="text-xl text-muted-foreground">Say &ldquo;Vega, sign in&rdquo; or &ldquo;Vega, start time out&rdquo;.</p>
+        <p className="text-xl text-muted-foreground">Say &ldquo;ARNIE, brief me&rdquo; or &ldquo;ARNIE, start the operation&rdquo;.</p>
       </CardContent>
     </Card>
   );
@@ -260,7 +264,7 @@ function Hero({ v }: { v: EngineView }) {
       <Card className="h-full">
         <CardContent className="mx-auto w-full max-w-[min(100%,72vh)]">
           <CtViewer imaging={v.imaging} />
-          <p className="mt-3 text-center text-sm text-muted-foreground">&ldquo;Vega, go to the knee · bone window · coronal view · play through · zoom in&rdquo;</p>
+          <p className="mt-3 text-center text-sm text-muted-foreground">&ldquo;ARNIE, go to the knee · bone window · coronal view · play through · zoom in&rdquo;</p>
         </CardContent>
       </Card>
     );
@@ -271,7 +275,7 @@ function Hero({ v }: { v: EngineView }) {
   return <IdleHero />;
 }
 
-// What Vega checks what it hears against: the allergies and medication orders on the chart.
+// What ARNIE checks what it hears against: the allergies and medication orders on the chart.
 function ChartStrip({ v }: { v: EngineView }) {
   const { allergies, orders } = v.case;
   const label = "text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground";
@@ -321,9 +325,9 @@ export function Board() {
         <div className="flex flex-wrap items-center gap-5">
           <PhaseStepper v={v} />
           <div className="flex items-center gap-2.5">
-            <VegaRing state={v.paused ? "off" : vs} ticks={phaseTicks(v)} size={46} />
+            <ArnieRing state={v.paused ? "off" : vs} ticks={phaseTicks(v)} size={46} />
             <span className={cn("w-20 font-mono text-xs font-semibold uppercase tracking-[0.08em]", v.paused || vs === "off" ? "text-muted-foreground" : vs === "warning" ? "text-amber" : vs === "critical" ? "text-critical" : "text-teal")}>
-              {v.paused ? "Paused" : vs === "off" ? "Vega off" : vs === "listening" ? "Listening" : vs === "speaking" ? "Speaking" : vs === "warning" ? "Warning" : "Critical"}
+              {v.paused ? "Paused" : vs === "off" ? "ARNIE off" : vs === "listening" ? "Listening" : vs === "speaking" ? "Speaking" : vs === "warning" ? "Warning" : "Critical"}
             </span>
           </div>
           <span className="font-mono text-4xl font-semibold tabular-nums">{d ? `${pad2(d.getHours())}:${pad2(d.getMinutes())}` : "--:--"}</span>
@@ -351,7 +355,7 @@ export function Board() {
                     className={cn("text-[15px] leading-snug", t.who === "heard" ? "text-surgeon" : cn("border-l-[3px] pl-2.5", severityBorder[sev], sev !== "info" && severityText[sev]))}
                   >
                     <span className={cn("block text-[10px] font-semibold uppercase tracking-[0.1em]", t.who === "heard" ? "text-muted-foreground" : severityText[sev])}>
-                      {t.who === "heard" ? "Heard" : `Vega${sev === "critical" ? " · critical" : sev === "warning" ? " · warning" : ""}`}
+                      {t.who === "heard" ? "Heard" : `ARNIE${sev === "critical" ? " · critical" : sev === "warning" ? " · warning" : ""}`}
                       {t.via === "llm" && " · parsed by LLM"}
                     </span>
                     {t.text}
@@ -389,7 +393,7 @@ export function Board() {
       </div>
 
       <footer className="flex items-center justify-between gap-4 font-mono text-xs text-muted-foreground">
-        <span>{v.agent.running ? "Vega listening" : "Vega stopped"}{v.llm ? " · LLM fallback on" : ""}</span>
+        <span>{v.agent.running ? "ARNIE listening" : "ARNIE stopped"}{v.llm ? " · LLM fallback on" : ""}</span>
         <div className="flex items-center gap-4">
           <button
             type="button"

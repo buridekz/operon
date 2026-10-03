@@ -1,5 +1,5 @@
 // Medication statements in room speech: doses, the case's ordered medications, and spotting
-// "giving ampicillin" said to the team (not to Vega). Pure functions, no model involved.
+// "giving ampicillin" said to the team (not to ARNIE). Pure functions, no model involved.
 import { matchDrug } from "./formulary.js";
 
 /** A dose in a base unit: milligrams for anything by weight, otherwise units, millilitres or mEq. */
@@ -86,7 +86,7 @@ export function parseDose(text: string): Dose | null {
 const trim = (n: number) => String(Math.round(n * 100) / 100);
 const noun = (n: number, singular: string, plural: string) => `${trim(n)} ${n === 1 ? singular : plural}`;
 
-/** A dose as Vega says it: "2 grams", "500 milligrams", "50 micrograms", "5000 units". */
+/** A dose as ARNIE says it: "2 grams", "500 milligrams", "50 micrograms", "5000 units". */
 export function fmtDose(d: Dose): string {
   switch (d.unit) {
     case "mg":

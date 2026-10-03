@@ -12,7 +12,7 @@ export type TranscriptLine = { who: "heard" | "sv"; text: string; severity?: Sev
 
 export type EngineView = {
   phase: "idle" | "signin" | "timeout" | "signout" | "surgery" | "done";
-  /** Vega isn't listening (paused by voice or by the room's pause button). */
+  /** ARNIE isn't listening (paused by voice or by the room's pause button). */
   paused: boolean;
   case: { patient: string; summary: string; procedure: string; site: string; room: string; allergies: string[]; orders: string[]; preop: Record<string, string> };
   checklists: Record<"signin" | "timeout" | "signout", ChecklistView>;
@@ -28,6 +28,10 @@ export type EngineView = {
   };
   implants: { time: string; name: string }[];
   milestones: Partial<Record<"incision" | "closure", string>>;
+  /** Start (incision), end (closure) and how long it ran or has been running. */
+  operation: { start: string; end: string | null; duration: string } | null;
+  /** The end-of-case summary ARNIE last spoke. */
+  summary: { text: string; time: string } | null;
   imaging: {
     visible: boolean; study: string; view: "axial" | "coronal" | "sagittal"; slice: number; zoom: number; panX: number; panY: number;
     rotation: number; window: "soft" | "bone" | "wide"; playing: { everyMs: number } | null;

@@ -57,8 +57,25 @@ export function RecordView() {
           </CardAction>
         </CardHeader>
         <CardContent className="space-y-6">
+          {v.operation && (
+            <dl className="grid grid-cols-3 gap-4 rounded-lg border p-4">
+              {([["Start", v.operation.start], ["End", v.operation.end ?? "in progress"], ["Duration", v.operation.duration]] as const).map(([k, val]) => (
+                <div key={k}>
+                  <dt className="text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">{k}</dt>
+                  <dd className="mt-1 font-mono text-lg">{val}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+          {v.summary && (
+            <section>
+              <h2 className="mb-2 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">Spoken summary · {v.summary.time}</h2>
+              <p className="rounded-lg bg-teal-soft px-4 py-3 leading-relaxed">{v.summary.text}</p>
+              <p className="mt-1 text-xs text-muted-foreground">Worded by ARNIE from the confirmed log below. Verify before signing.</p>
+            </section>
+          )}
           <p className="text-sm text-muted-foreground">
-            Built only from events the team confirmed by voice. Nothing here was written by an AI model.
+            The entries below are built only from events the team confirmed by voice.
           </p>
           {SECTIONS.map((s) => {
             const rows = r.entries.filter((e) => s.kinds.includes(e.kind));

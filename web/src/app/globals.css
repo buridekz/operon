@@ -92,7 +92,7 @@
 
 .dark {
   /* Operon "patient monitor" palette: pitch black, monitor colors carry meaning.
-     green = Vega / confirmed (heart-rate trace), cyan = team speech & chrome (monitor bar),
+     green = ARNIE / confirmed (heart-rate trace), cyan = team speech & chrome (monitor bar),
      yellow = warning, red = critical (IEC 60601-1-8 alarm colors). */
   --background: #000000;
   --foreground: #f4f4f4;
@@ -145,7 +145,7 @@
     @apply font-sans;
   }
 }
-/* ---------- Vega ring + alarm motion (disabled for reduced-motion users) ---------- */
+/* ---------- ARNIE ring + alarm motion (disabled for reduced-motion users) ---------- */
 @keyframes vega-breathe {
   0%, 100% { opacity: 0.55; transform: scale(1); }
   50% { opacity: 1; transform: scale(1.035); }

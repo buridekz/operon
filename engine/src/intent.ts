@@ -21,7 +21,7 @@ export const SCHEMA = {
     dose: { type: "string", description: "Dose exactly as heard (e.g. '2 grams'), or empty." },
     value: { type: "string", enum: ["potassium", "hemoglobin", "none"] },
     specialty: { type: "string", description: "call_specialist: the medical specialty (an informal description normalised, e.g. 'the hip guy' -> 'orthopedics', 'the heart doctor' -> 'cardiology') or the doctor's name as heard (e.g. 'Dr. Valdez'), or 'none'." },
-    topic: { type: "string", enum: ["allergies", "orders", "procedure", "patient", "counts", "given", "milestones", "none"] },
+    topic: { type: "string", enum: ["allergies", "orders", "procedure", "patient", "counts", "given", "milestones", "briefing", "time", "elapsed", "summary", "none"] },
     item: { type: "string", enum: ["sponge", "needle", "suture", "implant", "none"] },
     quantity: { type: "integer", description: "How many items were opened; 0 if not said." },
     detail: { type: "string", description: "Suture type (e.g. '4-0 Prolene') or implant description as heard, or empty." },
@@ -51,7 +51,7 @@ Return the single best intent. Rules:
 - give_drug: copy the drug name as heard into "drug" and any dose as heard into "dose" (do not correct or substitute either).
 - open_items: sponges/lap pads -> item "sponge"; loose needles -> "needle"; a suture like "4-0 Prolene" -> item "suture" with detail; an implant/graft/mesh/plate/screw -> item "implant" with detail.
 - final_count: the team states the final count of sponges and/or needles.
-- milestone: incision or closure being called.
+- milestone: incision or closure being called, or starting / ending the operation (start = incision, end = closure).
 - imaging: driving the CT viewer. goto: a slice number in "quantity". scroll_down/scroll_up: how many slices in "quantity" (0 if not said).
   landmark: going to a body part on the scan (hip, groin, thigh, knee, calf, ankle, foot) with the body part in "detail".
   window_bone / window_soft / window_wide: display window. view_axial / view_coronal (front view) / view_sagittal (side view).
@@ -60,6 +60,8 @@ Return the single best intent. Rules:
   "the anaesthetist" -> "anesthesia", "the vessel surgeon" -> "vascular"); if a doctor is named instead, copy the name.
 - lookup: a question asking to hear something already in the case record (allergies, ordered medications or a drug's ordered dose
   with the drug in "drug", what has been given, sponge/needle counts, incision/closure times, the procedure or site, the patient).
+  briefing: a heads-up / rundown / status of the patient and case. time: what time it is. elapsed: how long the operation has been going.
+  summary: summarise / recap / debrief the case.
   A question about a pre-op lab value is preop_value; about tourniquet time is tourniquet_time; about the antibiotic time is antibiotic_time.`;
 
 export const supportsTemperature = (model: string) => /^gpt-(3|4)/.test(model);

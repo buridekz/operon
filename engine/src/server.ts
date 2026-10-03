@@ -1,13 +1,13 @@
-// Operon engine (voice agent "Vega"): the custom LLM endpoint for Agora's voice agent, case state, timers,
+// Operon engine (voice agent "ARNIE"): the custom LLM endpoint for Agora's voice agent, case state, timers,
 // specialist patch-in, and the live state feed (SSE) for the Next.js app.
 import "dotenv/config";
 import express, { type Response } from "express";
 import cors from "cors";
-import { createState, handle, applyIntent, applyScreen, chatContext, tick, consultJoined, endConsult, view, signRecord, severityOf, SAY_AGAIN, type CaseSetup, type Opts, type Severity, type Turn } from "./brain.js";
+import { createState, handle, applyIntent, applyScreen, chatContext, summaryFacts, summaryTemplate, tick, consultJoined, endConsult, view, signRecord, severityOf, SAY_AGAIN, type CaseSetup, type Opts, type Severity, type Turn } from "./brain.js";
 import { rtcRtmToken, startAgent, speak, stopAgent, type AgoraConfig } from "./agora.js";
 import { createIntentParser } from "./intent.js";
 import { createDrugScreener } from "./drugscreen.js";
-import { createChat } from "./chat.js";
+import { createChat, createSummarizer } from "./chat.js";
 import { TurnTracker } from "./turns.js";
 
 const cfg: AgoraConfig = {
@@ -30,8 +30,19 @@ const parseIntent = createIntentParser(process.env.OPENAI_API_KEY, process.env.O
 const screenDrug = createDrugScreener(process.env.OPENAI_API_KEY, process.env.OPENAI_MODEL || "gpt-5.4-mini");
 let lastScreenAt = 0;
 const chat = createChat(process.env.OPENAI_API_KEY, process.env.OPENAI_MODEL || "gpt-5.4-mini");
+const summarizer = createSummarizer(process.env.OPENAI_API_KEY, process.env.OPENAI_MODEL || "gpt-5.4-mini");
 
-/** Vega answering in its own words (see chat.ts). Falls back to "say that again" if the model is unavailable. */
+/** End-of-case summary: times and facts from the log (summaryFacts), worded by a model, or the template without one. */
+async function summarize(): Promise<{ reply: string; via: "llm" | "rules" }> {
+  const facts = summaryFacts(state, Date.now());
+  const text = summarizer ? await summarizer(facts) : null;
+  const reply = text ?? summaryTemplate(facts);
+  state.summary = { text: reply, at: Date.now() };
+  console.log(`[summary] ${JSON.stringify(facts)} -> ${reply}`);
+  return { reply, via: text ? "llm" : "rules" };
+}
+
+/** ARNIE answering in its own words (see chat.ts). Falls back to "say that again" if the model is unavailable. */
 async function converse(said: string): Promise<{ reply: string; via: "llm" | "rules" }> {
   const text = chat ? await chat(said, chatContext(state, Date.now(), opts)) : null;
   console.log(`[chat] "${said}" -> ${text ?? "(no answer)"}`);
@@ -62,12 +73,13 @@ async function speakOut(text: string, priority: "APPEND" | "INTERRUPT" = "APPEND
   try { await speak(cfg, agentId, text, priority); } catch (e) { console.error("[speak]", (e as Error).message); }
 }
 
-/** One heard sentence → what Vega says (or null). Uses the LLM only if the rules can't parse a command. */
+/** One heard sentence → what ARNIE says (or null). Uses the LLM only if the rules can't parse a command. */
 async function respond(heard: string): Promise<{ reply: string | null; via: "rules" | "llm" }> {
   const now = Date.now();
   const turn: Turn = handle(state, heard, now, opts);
   if (turn === null || typeof turn === "string") return { reply: turn, via: "rules" };
   if ("chat" in turn) return converse(turn.chat);
+  if ("summarize" in turn) return summarize();
   if ("screen" in turn) { // room speech naming a drug that isn't in our list
     if (!screenDrug || Date.now() - lastScreenAt < 3000) return { reply: null, via: "rules" };
     lastScreenAt = Date.now();
@@ -79,6 +91,7 @@ async function respond(heard: string): Promise<{ reply: string | null; via: "rul
   const intent = await parseIntent(turn.parse);
   console.log(`[llm] "${turn.parse}" -> ${JSON.stringify(intent)}`);
   if (intent.intent === "conversation") return converse(turn.parse);
+  if (intent.intent === "lookup" && intent.topic === "summary") return summarize();
   return { reply: applyIntent(state, intent, Date.now(), opts), via: "llm" };
 }
 
@@ -118,7 +131,7 @@ app.post("/chat/completions", async (req, res) => {
     chunk({ role: "assistant", content: reply });
     chunk({}, "stop");
   }
-  res.write("data: [DONE]\n\n"); // no chunks = Vega stays silent this turn
+  res.write("data: [DONE]\n\n"); // no chunks = ARNIE stays silent this turn
   res.end();
 });
 
@@ -152,7 +165,7 @@ app.post("/api/start", async (_req, res) => {
   }
 });
 
-// The room's pause button: Vega stops listening (the mic is muted on the room device too).
+// The room's pause button: ARNIE stops listening (the mic is muted on the room device too).
 app.post("/api/listen", (req, res) => {
   state.paused = req.body?.paused === true;
   broadcast();
@@ -172,7 +185,7 @@ app.post("/api/consult/joined", async (_req, res) => {
   res.json({ ok: true, brief });
 });
 
-// The specialist hung up or declined: Vega tells the room and is back to normal.
+// The specialist hung up or declined: ARNIE tells the room and is back to normal.
 app.post("/api/consult/end", async (_req, res) => {
   const said = endConsult(state, Date.now(), "specialist");
   if (said) await speakOut(said);

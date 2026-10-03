@@ -32,7 +32,7 @@ export function playEarcon(ctx: AudioContext, kind: Earcon) {
   }
 }
 
-/** Plays a tone for each new Vega line: alerts by severity, a chime for "Logged". */
+/** Plays a tone for each new ARNIE line: alerts by severity, a chime for "Logged". */
 export function useEarcons(view: EngineView | null, ctx: AudioContext | null) {
   const seen = useRef<number | null>(null);
   useEffect(() => {

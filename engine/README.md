@@ -48,22 +48,22 @@ Confirmations ("Confirmed") and checklist answers are never sent to the LLM.
 
 ## Demo script
 
-| Say | Vega |
+| Say | ARNIE |
 |---|---|
-| "Vega, start time out." | "Time out. Team, confirm patient name and procedure." |
+| "ARNIE, start time out." | "Time out. Team, confirm patient name and procedure." |
 | "Juan Cruz, femoral repair. Confirmed." | "Surgeon, is the site marked?" |
 | "Skip it, let's start." | **"Time out not complete: site marking not confirmed."** |
 | "Site marked, left thigh. Confirmed." → "Given." → "None expected, confirmed." | … "Time out complete." |
-| "Vega, tourniquet on, left thigh." → "Confirmed." | Read-back, then "Logged." (timer starts) |
-| "Vega, give ampicillin." (works even mid-checklist) | **"Caution: penicillin allergy recorded at sign-in."** |
-| "Vega, when was the antibiotic given?" / "read back the potassium" | Read-back from the record |
-| "Vega, skin incision." → "Confirmed." | Milestone logged (also "closure") |
-| "Vega, opening 10 sponges." / "opening a 4-0 Prolene." → "Confirmed." | Counts on the field (sutures add a needle) |
-| "Vega, implant a 6 millimeter PTFE graft." → "Confirmed." | Implant recorded for the chart |
-| "Vega, final count 9 sponges, 1 needle." → "Confirmed." | **"Count mismatch: 1 sponge unaccounted."** (critical) |
-| "Vega, show the pre-op CT" · "next slice" · "zoom in" · "rotate" · "close the images" | Simulated CT on the board |
-| "Vega, call vascular." | Specialist phone rings → on answer, AI briefing |
-| "Vega, end consult." · "Vega, sign out." | Sign-out won't accept "counts correct" until counts reconcile |
+| "ARNIE, tourniquet on, left thigh." → "Confirmed." | Read-back, then "Logged." (timer starts) |
+| "ARNIE, give ampicillin." (works even mid-checklist) | **"Caution: penicillin allergy recorded at sign-in."** |
+| "ARNIE, when was the antibiotic given?" / "read back the potassium" | Read-back from the record |
+| "ARNIE, skin incision." → "Confirmed." | Milestone logged (also "closure") |
+| "ARNIE, opening 10 sponges." / "opening a 4-0 Prolene." → "Confirmed." | Counts on the field (sutures add a needle) |
+| "ARNIE, implant a 6 millimeter PTFE graft." → "Confirmed." | Implant recorded for the chart |
+| "ARNIE, final count 9 sponges, 1 needle." → "Confirmed." | **"Count mismatch: 1 sponge unaccounted."** (critical) |
+| "ARNIE, show the pre-op CT" · "next slice" · "zoom in" · "rotate" · "close the images" | Simulated CT on the board |
+| "ARNIE, call vascular." | Specialist phone rings → on answer, AI briefing |
+| "ARNIE, end consult." · "ARNIE, sign out." | Sign-out won't accept "counts correct" until counts reconcile |
 
 Messy phrasing ("put the cuff up on her left leg", "get me the vascular surgeon on the phone") is parsed by the OpenAI fallback into the same commands, with the same read-back. Dose questions return "Say that again."
 
@@ -81,11 +81,11 @@ npm run typecheck
 Tested end to end: synthesized speech → `/room` mic → Agora ARES → `/chat/completions` → spoken reply.
 
 1. **Split answers.** Agora split "Site marked… Confirmed." into two turns; the trailing "Confirmed." would have confirmed the *next* question. Answers that arrive while a question is still being spoken are now ignored.
-2. **Silent turns are re-sent.** When we stay silent, Agora prepends that speech to the next turn ("Confirmed. Vega, give ampicillin."). `turns.ts` strips what we already ignored, so a stale "Confirmed." can't be reused.
+2. **Silent turns are re-sent.** When we stay silent, Agora prepends that speech to the next turn ("Confirmed. ARNIE, give ampicillin."). `turns.ts` strips what we already ignored, so a stale "Confirmed." can't be reused.
 3. **Commands mid-checklist.** "Give ampicillin" during a time-out was being swallowed; recognised wake-phrase commands now run at any time.
 4. **Drug names are the riskiest words.** A synthesized "ampicillin" was once heard as "give a"; the formulary refuses to guess. Rehearse drug lines with real voices.
 5. Silent turns do not trigger Agora's `failure_message`.
-6. **Wake word choice.** Candidates said to Agora ARES: "Vega", "Orion" and "Operon" were transcribed exactly; "SerJon" became "Sir John" (one sound from "surgeon"), "Sentry" became "Century", "Bantay" became "Banteay"/"Bante". The agent is **Vega** (whole word only, so "vegetable"/"vegan" never wake it). Re-check with your team's real voices before demo day.
+6. **Wake word choice.** Candidates said to Agora ARES: "ARNIE", "Orion" and "Operon" were transcribed exactly; "SerJon" became "Sir John" (one sound from "surgeon"), "Sentry" became "Century", "Bantay" became "Banteay"/"Bante". The agent is **ARNIE** (whole word only, so "vegetable"/"vegan" never wake it). Re-check with your team's real voices before demo day.
 
 ## Known limits
 

@@ -4,7 +4,7 @@ import { CT_STUDY, PLAY_MS, sliceCount } from "./ct.js";
 
 const T0 = new Date("2026-10-04T14:20:00+08:00").getTime();
 const opts = { minuteMs: 60000 };
-const say = (s: ReturnType<typeof createState>, text: string, t = T0) => handle(s, `Vega, ${text}`, t, opts);
+const say = (s: ReturnType<typeof createState>, text: string, t = T0) => handle(s, `ARNIE, ${text}`, t, opts);
 const intent = (p: Partial<Intent>): Intent => ({ ...EMPTY_INTENT, ...p });
 
 describe("CT viewer by voice", () => {
@@ -99,11 +99,11 @@ describe("this scan's landmarks", () => {
 });
 
 describe("pause listening", () => {
-  test("paused, Vega ignores everything (even a drug it would flag) until 'Vega, resume'", () => {
+  test("paused, ARNIE ignores everything (even a drug it would flag) until 'ARNIE, resume'", () => {
     const s = createState({ allergies: ["penicillin"] });
-    expect(say(s, "pause listening")).toBe("Paused. Say Vega, resume, when you need me.");
+    expect(say(s, "pause listening")).toBe("Paused. Say ARNIE, resume, when you need me.");
     expect(s.paused).toBe(true);
-    expect(handle(s, "So if the nurse says giving ampicillin, Vega would warn the team.", T0, opts)).toBeNull();
+    expect(handle(s, "So if the nurse says giving ampicillin, ARNIE would warn the team.", T0, opts)).toBeNull();
     expect(say(s, "show the CT")).toBeNull();
     expect(handle(s, "Resume", T0, opts)).toBeNull(); // without the wake word
     expect(s.log).toHaveLength(0);

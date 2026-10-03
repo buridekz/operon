@@ -1,4 +1,4 @@
-// Operon brain (voice agent "Vega"): the deterministic state machine behind the voice agent.
+// Operon brain (voice agent "ARNIE"): the deterministic state machine behind the voice agent.
 // Agora's agent sends every heard sentence here (via the custom LLM endpoint).
 //
 // Flow for a command:  heard text → ruleIntent() → (fallback: LLM → same Intent shape) → applyIntent()
@@ -90,7 +90,7 @@ export type Intent = {
   /** call_specialist: the specialty or doctor's name as heard, or "none". */
   specialty: string;
   /** lookup: what the team asked to hear from the case record. */
-  topic: "allergies" | "orders" | "procedure" | "patient" | "counts" | "given" | "milestones" | "none";
+  topic: "allergies" | "orders" | "procedure" | "patient" | "counts" | "given" | "milestones" | "briefing" | "time" | "elapsed" | "summary" | "none";
   /** open_items: what was opened, how many, and a description (e.g. "4-0 Prolene", "6 mm PTFE graft"). */
   item: "sponge" | "needle" | "suture" | "implant" | "none";
   quantity: number;
@@ -147,26 +147,28 @@ export type State = {
   milestones: Partial<Record<Milestone, number>>;
   imaging: Imaging | null;
   signedAt: number | null;
-  /** Not listening: the team is talking about Vega (a briefing, a demo), not to it. Alarms still sound. */
+  /** Not listening: the team is talking about ARNIE (a briefing, a demo), not to it. Alarms still sound. */
   paused: boolean;
+  /** The last end-of-case summary ARNIE spoke (model-written from summaryFacts, or the template). */
+  summary: { text: string; at: number } | null;
 };
 
 export type Opts = { minuteMs: number; alertMinutes?: number[] };
 /** handle() result: words to speak, null for silence, a request to parse a command with the LLM,
  *  or room speech naming a drug we don't list, to be screened against the recorded allergies. */
-export type Turn = string | null | { parse: string } | { screen: string } | { chat: string };
+export type Turn = string | null | { parse: string } | { screen: string } | { chat: string } | { summarize: true };
 
-// Wake word: "Vega", Operon's voice agent. Chosen after a live Agora test: ARES transcribed
-// "Vega" exactly every time (unlike "Vega" -> "Sir John", one sound from "surgeon", or
-// "Sentry" -> "Century"). Whole word only, so "vegetable" or "vegan" never wake it.
-const WAKE = /\bvegas?\b/i;
+// Wake word: "ARNIE" (Always Ready Nurse, In Emergencies), Operon's voice agent. Speech recognition
+// may spell it Arnie, Arney, Arny, Arni or hear "Ernie"; all of these wake it. Whole word only, and
+// everyday words that sound close ("army", "Annie", "honey") never do.
+const WAKE = /\b(?:arnie|arney|arny|arni|arnee|ernie|earnie)(?:'s)?\b/i;
 const YES = /\b(confirm(ed)?|yes|yep|correct|complete(d)?|done|affirmative|marked|given|none|no concerns?|labell?ed|off)\b/i;
 const CONFIRM = /\b(confirm(ed)?|yes|correct|affirmative)\b/i;
 const NO = /\b(cancel|no,? wait|wrong|correction|negative|scratch that)\b/i;
 const QUESTION = /^(what|whats|what's|which|how many|how much|when|who|tell me|remind me|read( me)? back|any|is there|are there|do we have|list|check)\b|\?$/i;
 const PAUSE = /\b(pause|stop|mute)\s+(listening|yourself|the mic)\b|\bgo (to )?sleep\b|\bstand ?by\b|^mute\b|^pause$/i;
 const RESUME = /\b(resume|wake up|start listening|unmute|i'?m back|back on|listen up)\b|^listen\b/i;
-const ABOUT_VEGA = /\b(your name|who are you|what are you|who made you|who built you|what can you do|how can you help|what do you do|introduce yourself|tell (?:me|us) about yourself|how are you|are you (?:there|listening|ready|awake)|thank(?:s| you)|good (?:morning|afternoon|evening|job)|hello|hi there)\b/i;
+const ABOUT_ARNIE = /\b(your name|who are you|what are you|who made you|who built you|what can you do|how can you help|what do you do|introduce yourself|tell (?:me|us) about yourself|how are you|are you (?:there|listening|ready|awake)|thank(?:s| you)|good (?:morning|afternoon|evening|job)|hello|hi there)\b/i;
 const SKIP = /\b(skip|let'?s (just )?start|move on|later|no time|we'?re late|go ahead without)\b/i;
 export const SAY_AGAIN = "Sorry, say that again.";
 
@@ -178,7 +180,7 @@ const num = (s: string | undefined): number => (s ? (/^\d+$/.test(s) ? Number(s)
 const NUM = String.raw`(\d+|a|an|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty)`;
 
 // Times are spoken and logged in the hospital's time zone, not the server's
-// (the engine runs on a UTC host; found when Vega said 18:05 at 02:05 Manila time).
+// (the engine runs on a UTC host; found when ARNIE said 18:05 at 02:05 Manila time).
 const TIME_ZONE = process.env.CASE_TIMEZONE || "Asia/Manila";
 const hhmm = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: TIME_ZONE });
 export const clock = (ms: number) => hhmm.format(new Date(ms));
@@ -214,6 +216,7 @@ export function createState(setup: CaseSetup = {}): State {
     imaging: null,
     signedAt: null,
     paused: false,
+    summary: null,
   };
 }
 
@@ -222,9 +225,9 @@ function addLog(state: State, now: number, text: string, kind: LogEntry["kind"] 
 }
 const alert = (state: State, now: number, text: string, severity: Severity) => addLog(state, now, text, "alert", { severity });
 
-/** Severity of something Vega says, for the board's colors (IEC 60601-1-8 style). */
+/** Severity of something ARNIE says, for the board's colors (IEC 60601-1-8 style). */
 export function severityOf(text: string): Severity {
-  if (/^(Caution|Count mismatch|Count not reconciled)|Logged\. Count mismatch|Tourniquet time: 1[2-9]\d minutes/.test(text)) return "critical";
+  if (/^(Caution|Count mismatch|Count not reconciled)|Logged\. Count mismatch|Caution: counts not reconciled|Tourniquet time: 1[2-9]\d minutes/.test(text)) return "critical";
   if (/not complete|^Tourniquet time:|^Please verify/.test(text)) return "warning";
   return "info";
 }
@@ -367,8 +370,29 @@ export function ruleIntent(body: string): Intent | null {
   m = body.match(/\bimplant(?:ing|ed)?\s+(?:(?:a|an|the|one)\s+)?(.+)$/i);
   if (m) return I({ intent: "open_items", item: "implant", quantity: 1, detail: m[1].replace(/[.,!?]+$/, "").trim() });
 
-  // Talking to Vega about Vega, or small talk: answered in its own words, never a lookup.
-  if (ABOUT_VEGA.test(t)) return I({ intent: "conversation" });
+  // The time, and how long the operation has run (read from the clock and the confirmed log).
+  if (/\bwhat(?:'s| is)? (?:the )?time(?: is it)?\b|\bcurrent time\b|\btime check\b|\bwhat time is it\b/.test(t) && !/\b(incision|closure|antibiotic|tourniquet|given)\b/.test(t)) {
+    return I({ intent: "lookup", topic: "time" });
+  }
+  if (/\bhow long\b.*\b(operating|operation|surgery|procedure|case|been going|in here|been at it)\b|\b(operating|operation|surgical) time\b|\bhow long have we been\b/.test(t) && !/\btourniquet\b/.test(t)) {
+    return I({ intent: "lookup", topic: "elapsed" });
+  }
+  // A heads-up on the patient and where things stand (after scrubbing in, or when someone joins).
+  if (/\bbrief(?:ing)? (?:me|us|the team)\b|\bbriefing\b|\bheads[- ]up\b|\b(?:give me|what's|whats|what is) (?:the |a )?(?:rundown|run down|status|update)\b|\bstatus update\b|\bcatch (?:me|us) up\b|\bpatient status\b|\bwhere are we\b/.test(t)) {
+    return I({ intent: "lookup", topic: "briefing" });
+  }
+  // End-of-case summary.
+  if (/\b(?:summar(?:y|ize|ise)|recap|debrief|sum (?:it )?up|wrap(?:-| )?up)\b/.test(t)) return I({ intent: "lookup", topic: "summary" });
+  // Start and end of the operation (the incision and closure times).
+  if (/\b(?:start|begin|starting|beginning|commence)\s+(?:the\s+)?(?:operation|surgery|procedure|case)\b|\bwe(?:'re| are) starting\b|\boperation (?:is )?(?:starting|started|begins)\b/.test(t)) {
+    return I({ intent: "milestone", milestone: "incision" });
+  }
+  if (/\b(?:end|finish|ending|finishing|complete|close out|conclude)\s+(?:the\s+)?(?:operation|surgery|procedure|case)\b|\b(?:operation|surgery|procedure|case) (?:is )?(?:done|over|complete|completed|finished)\b|\bwe(?:'re| are) (?:done|finished)\b/.test(t)) {
+    return I({ intent: "milestone", milestone: "closure" });
+  }
+
+  // Talking to ARNIE about ARNIE, or small talk: answered in its own words, never a lookup.
+  if (ABOUT_ARNIE.test(t)) return I({ intent: "conversation" });
 
   // Questions about the case record: read back, never logged. (Antibiotic time, pre-op labs and the
   // tourniquet clock have their own answers below.)
@@ -415,7 +439,7 @@ const SUBSTANCES = new Set(["povidone", "iodine", "betadine", "chlorhexidine", "
 
 /**
  * What the team named, checked against the case record: the allergies recorded at sign-in and the
- * ordered dose. Vega compares with the record; it never judges a dose on its own.
+ * ordered dose. ARNIE compares with the record; it never judges a dose on its own.
  * Returns the warning to speak, or null when nothing conflicts.
  */
 function checkMed(state: State, drug: string, dose: Dose | null, now: number): string | null {
@@ -433,7 +457,7 @@ function checkMed(state: State, drug: string, dose: Dose | null, now: number): s
   return null;
 }
 
-/** Room speech not addressed to Vega. Silent unless a medication that was named conflicts with the record. */
+/** Room speech not addressed to ARNIE. Silent unless a medication that was named conflicts with the record. */
 function overhear(state: State, heard: string, now: number): Turn {
   const med = findMedMention(heard);
   if (med) return med.negated ? null : checkMed(state, med.drug, med.dose, now);
@@ -501,13 +525,16 @@ export function applyIntent(state: State, intent: Intent, now: number, opts: Opt
       const sponges = intent.sponges < 0 ? state.counts.sponge : intent.sponges;
       const needles = intent.needles < 0 ? state.counts.needle : intent.needles;
       state.pending = { kind: "final-count", sponges, needles, at: now };
-      return `Final count: ${plural(sponges, "sponge")}, ${plural(needles, "needle")}. Confirm?`;
+      return `Final count: ${countText(sponges, needles, state)}. Confirm?`;
     }
 
     case "milestone": {
       if (intent.milestone === "none") return SAY_AGAIN;
+      if (state.milestones[intent.milestone] != null) {
+        return `${intent.milestone === "incision" ? "The operation started" : "The operation ended"} at ${clock(state.milestones[intent.milestone]!)}.`;
+      }
       state.pending = { kind: "milestone", milestone: intent.milestone, at: now };
-      return `${MILESTONES[intent.milestone]}, ${clock(now)}. Confirm?`;
+      return `${intent.milestone === "incision" ? "Operation start, incision" : "Operation end, closure"}, ${clock(now)}. Confirm?`;
     }
 
     case "imaging":
@@ -535,7 +562,7 @@ export function applyIntent(state: State, intent: Intent, now: number, opts: Opt
     }
 
     case "lookup":
-      return lookup(state, intent);
+      return lookup(state, intent, now, opts);
 
     case "tourniquet_time":
       if (!state.tourniquet) return "No tourniquet is recorded.";
@@ -549,8 +576,42 @@ export function applyIntent(state: State, intent: Intent, now: number, opts: Opt
 const list = (xs: string[]) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
 const withDose = (o: Order) => `${o.drug}${o.dose ? ` ${fmtDose(o.dose)}` : ""}`;
 
+/** "9 sponges, 2 needles", or just the sponges when no needles were opened or counted. */
+const countText = (sponges: number, needles: number, state: State) =>
+  needles || state.counts.needle ? `${plural(sponges, "sponge")}, ${plural(needles, "needle")}` : plural(sponges, "sponge");
+
+/** "1 hour 5 minutes", "29 minutes", "less than a minute". */
+export function duration(from: number, to: number): string {
+  const mins = Math.max(0, Math.round((to - from) / 60000));
+  if (mins < 1) return "less than a minute";
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return [h ? plural(h, "hour") : "", m ? plural(m, "minute") : ""].filter(Boolean).join(" ");
+}
+
+/** The heads-up after scrubbing in: who, what, what to watch for, and where things stand. All from the record. */
+function briefing(state: State, now: number, opts: Opts): string {
+  const c = state.case;
+  const labs = Object.entries(c.preop).filter(([, v]) => v).map(([k, v]) => `${k} ${v}`);
+  const given = state.log.filter((l) => l.kind === "drug").map((l) => l.text.replace(/ given$/, ""));
+  const status = [
+    state.milestones.closure != null ? `operation ended at ${clock(state.milestones.closure)}`
+      : state.milestones.incision != null ? `operating ${duration(state.milestones.incision, now)}, since ${clock(state.milestones.incision)}`
+        : "not started yet",
+    state.tourniquet ? `tourniquet on ${state.tourniquet.side}, ${minutesSince(state.tourniquet.start, now, opts.minuteMs)} minutes` : "",
+    given.length ? `given: ${list(given)}` : "",
+  ].filter(Boolean);
+  return [
+    `${c.patient}, ${c.summary}, for ${c.procedure}, ${c.site}.`,
+    c.allergies.length ? `Allergic to ${list(c.allergies)}.` : "No allergies recorded.",
+    c.orders.length ? `Ordered: ${list(c.orders.map(withDose))}.` : "",
+    labs.length ? `Pre-op ${list(labs)}.` : "",
+    `Status: ${status.join("; ")}.`,
+  ].filter(Boolean).join(" ");
+}
+
 /** Read back what the case record holds. Facts only: nothing here is advice or inferred. */
-function lookup(state: State, intent: Intent): string {
+function lookup(state: State, intent: Intent, now: number, opts: Opts): string {
   const c = state.case;
   switch (intent.topic) {
     case "allergies":
@@ -583,6 +644,17 @@ function lookup(state: State, intent: Intent): string {
     }
     case "procedure":
       return `${cap(c.procedure)}, ${c.site}.`;
+    case "briefing":
+      return briefing(state, now, opts);
+    case "time":
+      return `It's ${clock(now)}.`;
+    case "elapsed": {
+      const start = state.milestones.incision;
+      if (start == null) return "The operation hasn't started. Say: ARNIE, start the operation.";
+      const end = state.milestones.closure;
+      if (end != null) return `The operation ran ${duration(start, end)}, from ${clock(start)} to ${clock(end)}.`;
+      return `${cap(duration(start, now))}, since ${clock(start)}.`;
+    }
     case "patient":
       return `${c.patient}. ${cap(c.summary)}.`;
     default:
@@ -631,7 +703,7 @@ function resolvePending(state: State, text: string, now: number): string | null 
       break;
     case "final-count": {
       state.finalCount = { sponge: p.sponges, needle: p.needles };
-      addLog(state, p.at, `Final count: ${plural(p.sponges, "sponge")}, ${plural(p.needles, "needle")}`, "count");
+      addLog(state, p.at, `Final count: ${countText(p.sponges, p.needles, state)}`, "count");
       const r = reconcile(state);
       if (!r.ok) {
         alert(state, now, `Count mismatch: ${r.missing.join(", ")}`, "critical");
@@ -639,10 +711,23 @@ function resolvePending(state: State, text: string, now: number): string | null 
       }
       return "Logged. Counts reconciled.";
     }
-    case "milestone":
+    case "milestone": {
       state.milestones[p.milestone] = p.at;
       addLog(state, p.at, MILESTONES[p.milestone], "milestone");
-      break;
+      if (p.milestone === "incision") {
+        if (state.phase === "idle") state.phase = "surgery";
+        return `Logged. Operation started at ${clock(p.at)}.`;
+      }
+      const start = state.milestones.incision;
+      const ran = start != null ? `, after ${duration(start, p.at)}, from ${clock(start)} to ${clock(p.at)}` : "";
+      const r = reconcile(state);
+      if (!r.ok) {
+        const why = r.needsCount ? "no final count recorded" : r.missing.join(", ");
+        alert(state, now, `Closed with counts not reconciled: ${why}`, "critical");
+        return `Logged. Operation ended at ${clock(p.at)}${ran}. Caution: counts not reconciled, ${why}.`;
+      }
+      return `Logged. Operation ended at ${clock(p.at)}${ran}.`;
+    }
   }
   return "Logged.";
 }
@@ -654,26 +739,26 @@ export function handle(state: State, text: string, now: number, opts: Opts): Tur
   const woke = WAKE.test(heard);
   const body = heard.replace(WAKE, "").replace(/^[\s,.:;-]+/, "").replace(/^(hey|ok|okay)[\s,]+/i, "");
 
-  // Paused: everything is ignored except "Vega, resume".
+  // Paused: everything is ignored except "ARNIE, resume".
   if (state.paused) {
     if (woke && RESUME.test(body)) { state.paused = false; return "Listening."; }
     return null;
   }
   if (woke && PAUSE.test(body)) {
     state.paused = true;
-    return "Paused. Say Vega, resume, when you need me.";
+    return "Paused. Say ARNIE, resume, when you need me.";
   }
 
-  // The team talking to each other, not to Vega: it stays out of it unless a medication that was
+  // The team talking to each other, not to ARNIE: it stays out of it unless a medication that was
   // named conflicts with the case record (an allergy, or a dose that differs from the order).
   if (!woke) {
     const heardMed = overhear(state, heard, now);
     if (heardMed) return heardMed;
   }
 
-  // A consult in progress: "Vega, end consult" ends it. While the specialist is on the line, only
-  // speech addressed to Vega is handled, so the team's talk with them is never taken as an answer.
-  // While it is still ringing, Vega works as usual.
+  // A consult in progress: "ARNIE, end consult" ends it. While the specialist is on the line, only
+  // speech addressed to ARNIE is handled, so the team's talk with them is never taken as an answer.
+  // While it is still ringing, ARNIE works as usual.
   if (woke && END_CONSULT.test(body) && (!state.consult || state.consult.state === "ended")) return "No consult in progress.";
   if (state.consult && state.consult.state !== "ended") {
     if (woke && END_CONSULT.test(body)) return endConsult(state, now, "room");
@@ -699,7 +784,47 @@ export function handle(state: State, text: string, now: number, opts: Opts): Tur
   const cmd = normalizeHeard(body); // speech-recognition sound-alikes ("city" -> CT, "got to the name" -> go to the knee)
   const intent = ruleIntent(cmd);
   if (intent?.intent === "conversation") return { chat: cmd };
+  if (intent?.intent === "lookup" && intent.topic === "summary") return { summarize: true };
   return intent ? applyIntent(state, intent, now, opts) : { parse: cmd };
+}
+
+/** Everything an end-of-case summary may say, computed from the confirmed log. Nothing inferred. */
+export function summaryFacts(state: State, now: number) {
+  const c = state.case;
+  const start = state.milestones.incision ?? null;
+  const end = state.milestones.closure ?? null;
+  const r = reconcile(state);
+  const alerts = state.log.filter((l) => l.kind === "alert");
+  return {
+    patient: c.patient, procedure: c.procedure, site: c.site, room: c.room,
+    start: start != null ? clock(start) : null,
+    end: end != null ? clock(end) : null,
+    duration: start != null ? duration(start, end ?? now) : null,
+    ongoing: start != null && end == null,
+    given: state.log.filter((l) => l.kind === "drug").map((l) => `${l.text.replace(/ given$/, "")} at ${l.time}`),
+    caught: alerts.filter((l) => /held|flagged/.test(l.text)).map((l) => `${l.text} at ${l.time}`),
+    otherAlerts: alerts.filter((l) => !/held|flagged/.test(l.text)).map((l) => `${l.text} at ${l.time}`),
+    consults: state.log.filter((l) => l.kind === "consult").map((l) => `${l.text} at ${l.time}`),
+    implants: state.implants.map((i) => i.name),
+    counts: state.counts.sponge + state.counts.needle === 0 ? "no counts recorded"
+      : r.ok ? "final count reconciled" : r.needsCount ? "no final count recorded" : `not reconciled: ${r.missing.join(", ")}`,
+    countsOk: r.ok,
+    checklists: Object.keys(state.completed),
+  };
+}
+
+/** The summary without a model: same facts, plain sentences. */
+export function summaryTemplate(f: ReturnType<typeof summaryFacts>): string {
+  const when = f.start ? (f.end ? `from ${f.start} to ${f.end}, ${f.duration}` : `started ${f.start}, ${f.duration} so far`) : "not started";
+  // Caught mistakes were stopped before anything was given; only an unreconciled count is still open.
+  return [
+    `${cap(f.procedure)} for ${f.patient}, ${when}.`,
+    f.given.length ? `Given: ${list(f.given)}.` : "No medications logged.",
+    f.caught.length ? `Caught: ${list(f.caught)}.` : "",
+    f.consults.some((x) => /live/.test(x)) ? "A specialist was consulted." : "",
+    `Counts: ${f.counts}.`,
+    !f.countsOk ? "Resolve the count before sign-off." : f.end ? "No unresolved issues." : "",
+  ].filter(Boolean).join(" ");
 }
 
 /** The case record as plain text, for the conversation model. Read-only facts; nothing inferred. */
@@ -720,7 +845,7 @@ export function chatContext(state: State, now: number, opts: Opts): string {
   return lines.filter(Boolean).join("\n");
 }
 
-/** Specialist joined the channel: the briefing Vega speaks to them. Only a ringing call can be
+/** Specialist joined the channel: the briefing ARNIE speaks to them. Only a ringing call can be
  *  answered, so a late join can't reopen a consult the room already ended. */
 export function consultJoined(state: State, now: number, opts: Opts): string | null {
   if (state.consult?.state !== "ringing") return null;
@@ -735,8 +860,8 @@ export function consultJoined(state: State, now: number, opts: Opts): string | n
 
 const END_CONSULT = /\bend\b.*\b(consult|call)\b|\bhang up\b|\bcancel\b.*\bcall\b/i;
 
-/** End the consult, from the room ("Vega, end consult") or the specialist's phone (hang up or
- *  decline). Returns what Vega says, or null if there was nothing to end. */
+/** End the consult, from the room ("ARNIE, end consult") or the specialist's phone (hang up or
+ *  decline). Returns what ARNIE says, or null if there was nothing to end. */
 export function endConsult(state: State, now: number, by: "room" | "specialist"): string | null {
   const c = state.consult;
   if (!c || c.state === "ended") return null;
@@ -805,6 +930,12 @@ export function view(state: State, now: number, opts: Opts) {
     },
     implants: state.implants,
     milestones: Object.fromEntries(Object.entries(state.milestones).map(([k, v]) => [k, clock(v!)])),
+    operation: state.milestones.incision != null ? {
+      start: clock(state.milestones.incision),
+      end: state.milestones.closure != null ? clock(state.milestones.closure) : null,
+      duration: duration(state.milestones.incision, state.milestones.closure ?? now),
+    } : null,
+    summary: state.summary && { text: state.summary.text, time: clock(state.summary.at) },
     // While playing, the board keeps the scan moving on its own clock from this snapshot.
     imaging: state.imaging && {
       ...state.imaging,

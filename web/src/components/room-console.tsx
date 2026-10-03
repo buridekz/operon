@@ -7,13 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Logo, VegaRing } from "@/components/vega-ring";
+import { Logo, ArnieRing } from "@/components/vega-ring";
 import { cn } from "@/lib/utils";
 import { engine, type CaseSetup } from "@/lib/engine";
 import { useEarcons } from "@/lib/earcons";
 import { joinChannel, type Call } from "@/lib/rtc";
 import { useEngineState } from "@/lib/use-engine";
-import { VEGA_LABEL, lastVegaLine, phaseTicks, vegaState } from "@/lib/vega";
+import { VEGA_LABEL, lastArnieLine, phaseTicks, vegaState } from "@/lib/vega";
 
 type Step = "case" | "mic" | "live";
 const STEPS: { key: Step; label: string }[] = [
@@ -36,15 +36,15 @@ const GROUPS: { title: string; fields: Field[] }[] = [
     fields: [
       { name: "procedure", label: "Procedure", value: "Exploration and repair, left femoral artery", wide: true },
       { name: "site", label: "Surgical site", value: "left thigh" },
-      { name: "summary", label: "One-line summary", value: "58-year-old male, left femoral bleed", hint: "Vega reads this to a specialist you call in." },
-      { name: "specialists", label: "On-call specialists", value: "vascular: Dr. Valdez; orthopedics: Dr. Lim; anesthesia: Dr. Ramos", hint: "Specialty: name, separated by semicolons. Say “Vega, call vascular” or the doctor’s name.", wide: true },
+      { name: "summary", label: "One-line summary", value: "58-year-old male, left femoral bleed", hint: "ARNIE reads this to a specialist you call in." },
+      { name: "specialists", label: "On-call specialists", value: "vascular: Dr. Valdez; orthopedics: Dr. Lim; anesthesia: Dr. Ramos", hint: "Specialty: name, separated by semicolons. Say “ARNIE, call vascular” or the doctor’s name.", wide: true },
     ],
   },
   {
     title: "Safety",
     fields: [
-      { name: "allergies", label: "Allergies", value: "penicillin", hint: "Separate with commas. Vega speaks up when a drug, brand name or skin prep it hears conflicts." },
-      { name: "orders", label: "Ordered medications", value: "cefazolin 2 g", hint: "From the chart, separated by semicolons. Vega compares any dose it hears with these. It never suggests a dose." },
+      { name: "allergies", label: "Allergies", value: "penicillin", hint: "Separate with commas. ARNIE speaks up when a drug, brand name or skin prep it hears conflicts." },
+      { name: "orders", label: "Ordered medications", value: "cefazolin 2 g", hint: "From the chart, separated by semicolons. ARNIE compares any dose it hears with these. It never suggests a dose." },
       { name: "potassium", label: "Pre-op potassium", value: "3.9" },
       { name: "hemoglobin", label: "Pre-op hemoglobin", value: "9.8" },
     ],
@@ -157,7 +157,7 @@ export function RoomConsole() {
     }
   }
 
-  async function startVega() {
+  async function startArnie() {
     setBusy(true);
     setError(null);
     setAudio((a) => a ?? new AudioContext()); // created on a click, so browsers allow the alert tones
@@ -165,14 +165,14 @@ export function RoomConsole() {
       await engine("/api/start", {});
       setStep("live");
     } catch (err) {
-      setError(`Vega couldn't start: ${(err as Error).message}`);
+      setError(`ARNIE couldn't start: ${(err as Error).message}`);
     } finally {
       setBusy(false);
     }
   }
 
   // Pause: the room mic goes silent and the engine ignores speech, so the team can talk about
-  // Vega (or explain a demo) without it reacting. Press M, or say "Vega, pause listening".
+  // ARNIE (or explain a demo) without it reacting. Press M, or say "ARNIE, pause listening".
   const [micMuted, setMicMuted] = useState(false);
   const paused = !!view?.paused || micMuted;
   async function togglePause() {
@@ -218,14 +218,14 @@ export function RoomConsole() {
     const text = rehearsal.trim();
     if (!text) return;
     setRehearsal("");
-    // A typed "Vega, resume" also undoes the pause button (which mutes the mic here).
+    // A typed "ARNIE, resume" also undoes the pause button (which mutes the mic here).
     if (paused && /\b(resume|wake up|start listening|unmute|i'?m back)\b/i.test(text)) return void (await togglePause());
     await engine("/api/simulate", { text });
   }
 
   const vs = vegaState(view, now);
   const lastHeard = view ? [...view.transcript].reverse().find((t) => t.who === "heard") : undefined;
-  const lastVega = view ? lastVegaLine(view) : undefined;
+  const lastArnie = view ? lastArnieLine(view) : undefined;
   const pct = Math.round(level * 100);
 
   return (
@@ -298,20 +298,20 @@ export function RoomConsole() {
           </Card>
           <div className="flex justify-between gap-3">
             <Button variant="secondary" size="lg" onClick={back} disabled={busy}>Back</Button>
-            <Button size="lg" onClick={startVega} disabled={busy || !micOn}>Start Vega</Button>
+            <Button size="lg" onClick={startArnie} disabled={busy || !micOn}>Start ARNIE</Button>
           </div>
         </section>
       )}
 
       {step === "live" && (
         <section className="mt-6 flex flex-1 flex-col items-center gap-6 text-center" aria-labelledby="live-title">
-          <VegaRing state={paused ? "off" : vs} ticks={phaseTicks(view)} size={190} className="mt-4" />
+          <ArnieRing state={paused ? "off" : vs} ticks={phaseTicks(view)} size={190} className="mt-4" />
           <div aria-live="polite">
             <h1 id="live-title" className={cn("font-heading text-4xl font-semibold", !paused && vs === "warning" && "text-amber", !paused && vs === "critical" && "text-critical")}>
-              {paused ? "Paused, not listening" : VEGA_LABEL[vs].replace(/^Vega /, "").replace(/^is /, "").replace(/^raised an? /, "")}
+              {paused ? "Paused, not listening" : VEGA_LABEL[vs].replace(/^ARNIE /, "").replace(/^is /, "").replace(/^raised an? /, "")}
             </h1>
             <p className="mt-2 text-lg text-muted-foreground">
-              {view?.phase === "idle" ? <>Say &ldquo;<span className="text-foreground">Vega, start time out</span>&rdquo;</> : `${view?.case.room} · ${view?.case.patient}`}
+              {view?.phase === "idle" ? <>Say &ldquo;<span className="text-foreground">ARNIE, start time out</span>&rdquo;</> : `${view?.case.room} · ${view?.case.patient}`}
             </p>
           </div>
 
@@ -321,9 +321,9 @@ export function RoomConsole() {
                 <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">Heard</p>
                 <p className="text-lg text-surgeon">{lastHeard?.text ?? "…"}</p>
               </div>
-              <div className={cn("border-l-[3px] pl-3", lastVega?.severity === "critical" ? "border-critical" : lastVega?.severity === "warning" ? "border-amber" : "border-teal")}>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-teal">Vega</p>
-                <p className={cn("text-lg", lastVega?.severity === "critical" && "text-critical", lastVega?.severity === "warning" && "text-amber")}>{lastVega?.text ?? "…"}</p>
+              <div className={cn("border-l-[3px] pl-3", lastArnie?.severity === "critical" ? "border-critical" : lastArnie?.severity === "warning" ? "border-amber" : "border-teal")}>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-teal">ARNIE</p>
+                <p className={cn("text-lg", lastArnie?.severity === "critical" && "text-critical", lastArnie?.severity === "warning" && "text-amber")}>{lastArnie?.text ?? "…"}</p>
               </div>
             </CardContent>
           </Card>
@@ -338,7 +338,7 @@ export function RoomConsole() {
               Open wall board <ExternalLink className="size-4" aria-hidden />
             </Button>
             <Button variant="destructive" size="lg" onClick={stop} disabled={busy}>
-              <Square className="size-4" aria-hidden /> Stop Vega
+              <Square className="size-4" aria-hidden /> Stop ARNIE
             </Button>
           </div>
 
@@ -346,12 +346,12 @@ export function RoomConsole() {
             <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">Rehearse without a microphone</summary>
             <form onSubmit={rehearse} className="mt-3 flex gap-2">
               <Label htmlFor="rehearsal" className="sr-only">Type a sentence as if it was spoken</Label>
-              <Input id="rehearsal" value={rehearsal} onChange={(e) => setRehearsal(e.target.value)} placeholder="Vega, start time out" />
+              <Input id="rehearsal" value={rehearsal} onChange={(e) => setRehearsal(e.target.value)} placeholder="ARNIE, start time out" />
               <Button type="submit" variant="secondary">Send</Button>
             </form>
             {paused && (
               <p className="mt-2 text-sm text-amber" role="status">
-                Vega is paused and won&apos;t answer. Press Resume listening (M) or send &ldquo;Vega, resume&rdquo;.
+                ARNIE is paused and won&apos;t answer. Press Resume listening (M) or send &ldquo;ARNIE, resume&rdquo;.
               </p>
             )}
           </details>
