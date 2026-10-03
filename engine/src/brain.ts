@@ -4,7 +4,8 @@
 // Flow for a command:  heard text → ruleIntent() → (fallback: LLM → same Intent shape) → applyIntent()
 // The LLM may only produce an Intent. Every spoken reply is a template in this file, and
 // confirmations / checklist answers are never interpreted by a model.
-import { matchDrug } from "./formulary.js";
+import { matchDrug, allergyConflict } from "./formulary.js";
+import { findMedMention, fmtDose, parseDose, parseOrders, sameDose, unknownDrugWord, type Dose, type Order } from "./meds.js";
 
 export type ChecklistName = "signin" | "timeout" | "signout";
 type Item = { id: string; spoken: string; label: string; ask: string };
@@ -36,13 +37,6 @@ export const CHECKLISTS: Record<ChecklistName, { title: string; items: Item[] }>
   },
 };
 
-// An order for any drug in a class conflicts with that recorded allergy.
-export const ALLERGY_CLASSES: Record<string, string[]> = {
-  penicillin: ["penicillin", "amoxicillin", "ampicillin", "piperacillin"],
-  cephalosporin: ["cefazolin", "ceftriaxone", "cefuroxime"],
-  sulfa: [],
-};
-
 export const SPECIALISTS = {
   vascular: "Dr. Valdez",
   anesthesia: "Dr. Ramos",
@@ -66,6 +60,8 @@ export type Intent = {
   side: "left" | "right" | "none";
   limb: "thigh" | "arm" | "leg" | "forearm" | "calf" | "none";
   drug: string;
+  /** give_drug: the dose as heard ("2 grams"), or empty. */
+  dose: string;
   value: "potassium" | "hemoglobin" | "none";
   specialty: Specialty | "none";
   /** open_items: what was opened, how many, and a description (e.g. "4-0 Prolene", "6 mm PTFE graft"). */
@@ -80,13 +76,15 @@ export type Intent = {
 };
 
 export const EMPTY_INTENT: Intent = {
-  intent: "unknown", checklist: "none", side: "none", limb: "none", drug: "", value: "none", specialty: "none",
+  intent: "unknown", checklist: "none", side: "none", limb: "none", drug: "", dose: "", value: "none", specialty: "none",
   item: "none", quantity: 0, detail: "", sponges: -1, needles: -1, milestone: "none", imaging: "none",
 };
 
 export type CaseSetup = {
   patient?: string; summary?: string; procedure?: string; site?: string; room?: string;
   allergies?: string[]; preop?: Record<string, string>; antibioticGiven?: { drug: string; at: number } | null;
+  /** Ordered medications from the chart, e.g. "cefazolin 2 g; heparin 5000 units". Doses heard are checked against these. */
+  orders?: string;
 };
 export type Severity = "info" | "warning" | "critical";
 export type LogEntry = {
@@ -96,14 +94,14 @@ export type LogEntry = {
 };
 type Pending =
   | { kind: "tourniquet-on" | "tourniquet-off"; side: string; at: number }
-  | { kind: "drug"; drug: string; at: number }
+  | { kind: "drug"; drug: string; dose: Dose | null; at: number }
   | { kind: "items"; item: CountItem | "suture"; quantity: number; detail: string; at: number }
   | { kind: "implant"; detail: string; at: number }
   | { kind: "final-count"; sponges: number; needles: number; at: number }
   | { kind: "milestone"; milestone: Milestone; at: number };
 
 export type State = {
-  case: Required<Omit<CaseSetup, "antibioticGiven">> & { antibioticGiven: { drug: string; at: number } | null };
+  case: Required<Omit<CaseSetup, "antibioticGiven" | "orders">> & { antibioticGiven: { drug: string; at: number } | null; orders: Order[] };
   phase: "idle" | ChecklistName | "surgery" | "done";
   checklist: { name: ChecklistName; index: number; done: Record<string, boolean>; blocked: boolean; askedAt: number; settleMs: number } | null;
   completed: Partial<Record<ChecklistName, number>>;
@@ -120,8 +118,9 @@ export type State = {
 };
 
 export type Opts = { minuteMs: number; alertMinutes?: number[] };
-/** handle() result: words to speak, null for silence, or a request to parse a command with the LLM. */
-export type Turn = string | null | { parse: string };
+/** handle() result: words to speak, null for silence, a request to parse a command with the LLM,
+ *  or room speech naming a drug we don't list, to be screened against the recorded allergies. */
+export type Turn = string | null | { parse: string } | { screen: string };
 
 // Wake word: "Vega", Operon's voice agent. Chosen after a live Agora test: ARES transcribed
 // "Vega" exactly every time (unlike "Vega" -> "Sir John", one sound from "surgeon", or
@@ -160,6 +159,7 @@ export function createState(setup: CaseSetup = {}): State {
       allergies: (setup.allergies ?? ["penicillin"]).map((a) => a.toLowerCase().trim()).filter(Boolean),
       preop: setup.preop ?? { potassium: "3.9", hemoglobin: "9.8" },
       antibioticGiven: setup.antibioticGiven ?? null,
+      orders: parseOrders(setup.orders),
     },
     phase: "idle",
     checklist: null,
@@ -185,7 +185,7 @@ const alert = (state: State, now: number, text: string, severity: Severity) => a
 /** Severity of something Vega says, for the board's colors (IEC 60601-1-8 style). */
 export function severityOf(text: string): Severity {
   if (/^(Caution|Count mismatch|Count not reconciled)|Logged\. Count mismatch|Tourniquet time: 1[2-9]\d minutes/.test(text)) return "critical";
-  if (/not complete|^Tourniquet time:/.test(text)) return "warning";
+  if (/not complete|^Tourniquet time:|^Please verify/.test(text)) return "warning";
   return "info";
 }
 
@@ -304,7 +304,7 @@ export function ruleIntent(body: string): Intent | null {
   if (/\b(skin\s+)?incision\b/.test(t)) return I({ intent: "milestone", milestone: "incision" });
   if (/\bclos(ure|ing)\b/.test(t)) return I({ intent: "milestone", milestone: "closure" });
 
-  m = t.match(/\b(?:give|administer|push)\s+(.+)$/);
+  m = t.match(/\b(?:give|giving|gave|administer(?:ing)?|push(?:ing)?|inject(?:ing)?)\s+(.+)$/);
   if (m) return I({ intent: "give_drug", drug: m[1].replace(/[.,!?]+$/, "").trim() });
 
   if (/antibiotic/.test(t) && /(when|time|given)/.test(t)) return I({ intent: "antibiotic_time" });
@@ -317,12 +317,41 @@ export function ruleIntent(body: string): Intent | null {
   return null;
 }
 
-function drugConflict(state: State, drug: string): string | null {
-  for (const allergy of state.case.allergies) {
-    const cls = ALLERGY_CLASSES[allergy] ?? [allergy];
-    if (cls.includes(drug) || drug === allergy) return allergy;
+const SUBSTANCES = new Set(["povidone", "iodine", "betadine", "chlorhexidine", "latex", "contrast"]);
+
+/**
+ * What the team named, checked against the case record: the allergies recorded at sign-in and the
+ * ordered dose. Vega compares with the record; it never judges a dose on its own.
+ * Returns the warning to speak, or null when nothing conflicts.
+ */
+function checkMed(state: State, drug: string, dose: Dose | null, now: number): string | null {
+  const allergy = allergyConflict(drug, state.case.allergies);
+  if (allergy) {
+    alert(state, now, `${cap(drug)} held: ${allergy} allergy recorded at sign-in`, "critical");
+    return `Caution: ${allergy} allergy recorded at sign-in. ${cap(drug)} ${SUBSTANCES.has(drug) ? "flagged" : "not logged"}.`;
+  }
+  const ordered = state.case.orders.filter((o) => o.drug === drug && o.dose);
+  if (dose && ordered.length && !ordered.some((o) => sameDose(o.dose!, dose))) {
+    const want = fmtDose(ordered[0].dose!);
+    alert(state, now, `${cap(drug)} held: ${fmtDose(dose)} stated, ${want} ordered`, "critical");
+    return `Caution: ${drug} is ordered at ${want} in the case record. ${cap(fmtDose(dose))} was stated. Not logged.`;
   }
   return null;
+}
+
+/** Room speech not addressed to Vega. Silent unless a medication that was named conflicts with the record. */
+function overhear(state: State, heard: string, now: number): Turn {
+  const med = findMedMention(heard);
+  if (med) return med.negated ? null : checkMed(state, med.drug, med.dose, now);
+  if (state.case.allergies.length && unknownDrugWord(heard)) return { screen: heard };
+  return null;
+}
+
+/** A drug we don't list was named and the model thinks it may conflict with a recorded allergy.
+ *  This only asks the team to verify; a model can raise a warning here, never clear one. */
+export function applyScreen(state: State, drug: string, allergy: string, now: number): string {
+  alert(state, now, `${cap(drug)} flagged: may conflict with ${allergy} allergy (verify)`, "warning");
+  return `Please verify: ${cap(drug)} may conflict with the recorded ${allergy} allergy.`;
 }
 
 function imaging(state: State, action: Intent["imaging"]): string {
@@ -357,13 +386,11 @@ export function applyIntent(state: State, intent: Intent, now: number, opts: Opt
     case "give_drug": {
       const drug = matchDrug(intent.drug);
       if (!drug) return "Which drug? Say the name again.";
-      const allergy = drugConflict(state, drug);
-      if (allergy) {
-        alert(state, now, `${cap(drug)} held: ${allergy} allergy recorded at sign-in`, "critical");
-        return `Caution: ${allergy} allergy recorded at sign-in. ${cap(drug)} not logged.`;
-      }
-      state.pending = { kind: "drug", drug, at: now };
-      return `${cap(drug)}, ${clock(now)}. Confirm?`;
+      const dose = parseDose(intent.dose) ?? parseDose(intent.drug);
+      const warning = checkMed(state, drug, dose, now);
+      if (warning) return warning;
+      state.pending = { kind: "drug", drug, dose, at: now };
+      return `${cap(drug)}${dose ? ` ${fmtDose(dose)}` : ""}, ${clock(now)}. Confirm?`;
     }
 
     case "open_items": {
@@ -453,7 +480,7 @@ function resolvePending(state: State, text: string, now: number): string | null 
       state.tourniquet = null;
       break;
     case "drug":
-      addLog(state, p.at, `${cap(p.drug)} given`, "drug", { drug: p.drug });
+      addLog(state, p.at, `${cap(p.drug)}${p.dose ? ` ${fmtDose(p.dose)}` : ""} given`, "drug", { drug: p.drug });
       break;
     case "items": {
       if (p.item === "suture") {
@@ -493,6 +520,13 @@ export function handle(state: State, text: string, now: number, opts: Opts): Tur
   if (!heard) return null;
   const woke = WAKE.test(heard);
   const body = heard.replace(WAKE, "").replace(/^[\s,.:;-]+/, "").replace(/^(hey|ok|okay)[\s,]+/i, "");
+
+  // The team talking to each other, not to Vega: it stays out of it unless a medication that was
+  // named conflicts with the case record (an allergy, or a dose that differs from the order).
+  if (!woke) {
+    const heardMed = overhear(state, heard, now);
+    if (heardMed) return heardMed;
+  }
 
   // A consult in progress: "Vega, end consult" ends it. While the specialist is on the line, only
   // speech addressed to Vega is handled, so the team's talk with them is never taken as an answer.
@@ -589,7 +623,7 @@ export function view(state: State, now: number, opts: Opts) {
   const r = reconcile(state);
   return {
     phase: state.phase,
-    case: state.case,
+    case: { ...state.case, orders: state.case.orders.map((o) => `${cap(o.drug)}${o.dose ? ` ${fmtDose(o.dose)}` : ""}`) },
     checklists,
     pending: state.pending,
     log: state.log,

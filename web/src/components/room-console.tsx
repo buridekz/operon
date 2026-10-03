@@ -42,7 +42,8 @@ const GROUPS: { title: string; fields: Field[] }[] = [
   {
     title: "Safety",
     fields: [
-      { name: "allergies", label: "Allergies", value: "penicillin", hint: "Separate with commas. Vega warns on any order that conflicts." },
+      { name: "allergies", label: "Allergies", value: "penicillin", hint: "Separate with commas. Vega speaks up when a drug, brand name or skin prep it hears conflicts." },
+      { name: "orders", label: "Ordered medications", value: "cefazolin 2 g", hint: "From the chart, separated by semicolons. Vega compares any dose it hears with these. It never suggests a dose." },
       { name: "potassium", label: "Pre-op potassium", value: "3.9" },
       { name: "hemoglobin", label: "Pre-op hemoglobin", value: "9.8" },
     ],
@@ -56,6 +57,7 @@ function caseFromForm(form: HTMLFormElement): CaseSetup {
     patient: get("patient"), room: get("room"), summary: get("summary"), procedure: get("procedure"), site: get("site"),
     allergies: get("allergies").split(",").map((s) => s.trim()).filter(Boolean),
     preop: { potassium: get("potassium"), hemoglobin: get("hemoglobin") },
+    orders: get("orders"),
   };
 }
 

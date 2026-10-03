@@ -15,7 +15,7 @@ const steps = [
 const features = [
   { icon: ShieldCheck, title: "Won't skip a step", say: "Skip it, let's start.", text: "The time-out can't complete until every item is confirmed out loud." },
   { icon: Repeat2, title: "Reads back first", say: "Vega, tourniquet on, left thigh.", text: "Nothing is logged until Vega reads it back and someone says “Confirmed.”" },
-  { icon: Pill, title: "Catches allergies", say: "Vega, give ampicillin.", text: "Orders are checked against allergies recorded at sign-in. No dosing advice, ever." },
+  { icon: Pill, title: "Catches allergies and doses", say: "Giving ampicillin, one gram.", text: "Vega listens to the team, not just to commands. It speaks up when a drug conflicts with a recorded allergy or a dose differs from the chart's order. It never suggests a dose." },
   { icon: Timer, title: "Watches the clock", say: "Vega, how long has the tourniquet been on?", text: "Tourniquet alerts at 60, 90 and 120 minutes, spoken and on the board." },
   { icon: PhoneCall, title: "Calls a specialist", say: "Vega, call vascular.", text: "The specialist's phone rings and Vega briefs them from the confirmed log." },
   { icon: ClipboardCheck, title: "Reconciles counts", say: "Vega, final count 10 sponges.", text: "Sponges, needles and implants are tracked; sign-out is blocked on a mismatch." },

@@ -12,7 +12,7 @@ export type TranscriptLine = { who: "heard" | "sv"; text: string; severity?: Sev
 
 export type EngineView = {
   phase: "idle" | "signin" | "timeout" | "signout" | "surgery" | "done";
-  case: { patient: string; summary: string; procedure: string; site: string; room: string; allergies: string[]; preop: Record<string, string> };
+  case: { patient: string; summary: string; procedure: string; site: string; room: string; allergies: string[]; orders: string[]; preop: Record<string, string> };
   checklists: Record<"signin" | "timeout" | "signout", ChecklistView>;
   pending: unknown;
   log: LogEntry[];
@@ -39,6 +39,8 @@ export type EngineView = {
 export type CaseSetup = {
   patient: string; room: string; summary: string; procedure: string; site: string;
   allergies: string[]; preop: Record<string, string>;
+  /** Ordered medications from the chart, e.g. "cefazolin 2 g; heparin 5000 units". */
+  orders: string;
 };
 
 let cached: Promise<string> | null = null;
