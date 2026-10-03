@@ -41,6 +41,8 @@ export type CaseSetup = {
   allergies: string[]; preop: Record<string, string>;
   /** Ordered medications from the chart, e.g. "cefazolin 2 g; heparin 5000 units". */
   orders: string;
+  /** On-call roster, e.g. "vascular: Dr. Valdez; orthopedics: Dr. Lim". */
+  specialists: string;
 };
 
 let cached: Promise<string> | null = null;
