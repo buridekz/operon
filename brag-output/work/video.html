@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>SterileVoice Launch Video</title>
+  <link rel="stylesheet" href="../../app.css" />
+  <style>
+    html, body { width: 1920px; height: 1080px; overflow: hidden; }
+    body { background: var(--bg); position: relative; }
+    .bg { position: absolute; inset: 0; background: radial-gradient(55% 65% at var(--gx, 50%) 35%, rgba(63, 193, 174, 0.08), transparent 70%); }
+    .scene { position: absolute; inset: 0; opacity: 0; }
+    .center { display: grid; place-items: center; text-align: center; }
+    .big { font-family: var(--head); font-size: 100px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.08; }
+    .big .w { display: inline-block; }
+    .big2 { font-family: var(--head); font-size: 64px; font-weight: 500; color: var(--muted); margin-top: 28px; }
+    .kicker { font-family: var(--mono); font-size: 20px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }
+    .h { font-family: var(--head); font-size: 66px; font-weight: 600; line-height: 1.05; letter-spacing: -0.01em; }
+    .h em { color: var(--accent); font-style: normal; }
+    .lockup { font-family: var(--head); font-weight: 700; font-size: 170px; letter-spacing: -0.02em; line-height: 1; }
+    .lockup i { color: var(--accent); font-style: normal; }
+    .subline { font-size: 36px; color: var(--muted); margin-top: 26px; }
+    #board { position: absolute; left: 100px; top: 150px; }
+    .col { position: absolute; left: 1220px; top: 200px; width: 620px; }
+    .col .h { margin-top: 18px; }
+    #s5 .h { margin-bottom: 40px; }
+    #s6 .left { position: absolute; left: 150px; top: 400px; width: 720px; }
+    #s6 .left .subline { font-size: 32px; }
+    #rec { position: absolute; left: 960px; top: 250px; }
+    #rec .record { width: 820px; }
+    #s7 .stack { display: flex; flex-direction: column; align-items: center; }
+    #s7 .tag { font-family: var(--head); font-size: 64px; font-weight: 600; }
+    #s7 .lk { margin-top: 56px; display: flex; flex-direction: column; align-items: center; }
+    #s7 .lk .lockup { font-size: 124px; }
+    #s7 .lk .one { font-size: 32px; color: var(--muted); margin-top: 14px; }
+    #s7 .foot { position: absolute; bottom: 70px; width: 100%; text-align: center; color: var(--faint); font-size: 20px; letter-spacing: 0.04em; }
+  </style>
+</head>
+<body>
+  <div class="bg"></div>
+
+  <div class="scene center" id="s1"><div>
+    <div class="big" id="hook"></div>
+    <div class="big2" id="hook2">Every screen in the room is out of reach.</div>
+  </div></div>
+
+  <div class="scene center" id="s2"><div>
+    <div class="lockup">Sterile<i>Voice</i></div>
+    <div class="subline">A voice copilot for the operating room.</div>
+  </div></div>
+
+  <div id="board"></div>
+
+  <div class="scene" id="s3"><div class="col">
+    <div class="kicker">Time out · 14:20</div>
+    <div class="h">It won't let anyone <em>skip a step</em>.</div>
+  </div></div>
+
+  <div class="scene" id="s4"><div class="col">
+    <div class="kicker">During surgery · 14:22</div>
+    <div class="h">Every number <em>read back</em>. Every allergy <em>checked</em>.</div>
+  </div></div>
+
+  <div class="scene" id="s5"><div class="col">
+    <div class="kicker">Specialist patch-in · 14:44</div>
+    <div class="h">“Call <em>vascular</em>.”</div>
+    <div id="call"></div>
+  </div></div>
+
+  <div class="scene" id="s6">
+    <div class="left">
+      <div class="h">The record <em>writes itself</em>.</div>
+      <div class="subline">Ready for sign-off. Zero keystrokes.</div>
+    </div>
+    <div id="rec"></div>
+  </div>
+
+  <div class="scene center" id="s7"><div class="stack">
+    <div class="tag" id="tag">No gloves off. No screens touched.</div>
+    <div class="lk" id="lk"><div class="lockup">Sterile<i>Voice</i></div><div class="one">Hands stay sterile. Eyes stay on the patient.</div></div>
+  </div><div class="foot" id="foot">Built on Agora Conversational AI · Voice First Track</div></div>
+
+  <script src="../../sv.js"></script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const HOOK = "Her hands are inside a patient.".split(" ");
+    $("hook").innerHTML = HOOK.map((w) => `<span class="w">${w}</span>`).join(" ");
+    SV.mountBoard($("board")); SV.mountCall($("call")); SV.mountRecord($("rec"));
+
+    const SCENES = { s1: [0, 3.4], s2: [3.4, 5.4], s3: [5.6, 11.4], s4: [11.4, 16.4], s5: [16.4, 21.4], s6: [21.4, 23.8], s7: [23.8, 26.6] };
+    const DURATION = 26.6;
+    function vis(t, [a, b], fin = 0.4, fout = 0.28) {
+      if (b >= DURATION) fout = 0.0001;
+      return SV.ease((t - a) / fin) * (1 - SV.ease((t - (b - fout)) / fout));
+    }
+    function fade(n, o, dy = 0) { n.style.opacity = o; if (dy) n.style.transform = `translateY(${dy}px)`; }
+
+    // Video time -> case time on the wall board.
+    function caseTime(t) {
+      if (t < 11.4) return t - 5.6;
+      if (t < 16.4) return 7.0 + (t - 11.6);
+      return 12.6 + (t - 16.6);
+    }
+
+    window.render = function (t) {
+      document.querySelector(".bg").style.setProperty("--gx", `${50 + 8 * Math.sin(t * 0.25)}%`);
+      for (const [id, w] of Object.entries(SCENES)) $(id).style.opacity = vis(t, w);
+
+      document.querySelectorAll("#hook .w").forEach((n, i) => {
+        const p = SV.ease((t - 0.15 - i * 0.18) / 0.45);
+        fade(n, p, (1 - p) * 18);
+      });
+      const h2 = SV.ease((t - 1.5) / 0.5);
+      fade($("hook2"), h2, (1 - h2) * 14);
+
+      const b = $("board");
+      b.style.opacity = SV.ease((t - 5.5) / 0.45) * (1 - SV.ease((t - 21.12) / 0.28));
+      b.style.transform = `translateY(${(1 - SV.ease((t - 5.5) / 0.6)) * 30}px)`;
+      const ct = caseTime(t);
+      SV.renderBoard(b, ct);
+      SV.renderCall($("call"), ct);
+
+      SV.renderRecord($("rec"), t - 21.6);
+
+      fade($("tag"), SV.ease((t - 23.95) / 0.45));
+      const lk = SV.ease((t - 24.6) / 0.5);
+      fade($("lk"), lk, (1 - lk) * 20);
+      fade($("foot"), SV.ease((t - 25.0) / 0.5));
+    };
+    window.DURATION = DURATION;
+    window.ready = (async () => {
+      for (const f of ["600 100px 'IBM Plex Sans Condensed'", "700 170px 'IBM Plex Sans Condensed'", "500 64px 'IBM Plex Sans Condensed'",
+                       "400 20px 'IBM Plex Sans'", "600 20px 'IBM Plex Sans'", "600 20px 'IBM Plex Mono'", "500 20px 'IBM Plex Mono'"]) {
+        await document.fonts.load(f);
+      }
+      await document.fonts.ready;
+      window.render(0);
+      return true;
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+# Secrets: Agora App Certificate, OpenAI key, LLM shared secret. Never commit.
+.env
+.env.*
+!.env.example
+
+# Dependencies and builds
+node_modules/
+.next/
+next-env.d.ts
+*.tsbuildinfo
+
+# Pitch video build intermediates (regenerate with brag-output/work/render.mjs)
+brag-output/work/frames/
+brag-output/work/stills/
+brag-output/work/check_*.jpg
+brag-output/work/music.wav
+
+# Tool caches and logs
+.impeccable/
+*.log

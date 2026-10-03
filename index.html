@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SterileVoice Prototype</title>
+  <link rel="stylesheet" href="app.css" />
+  <style>
+    body { padding: 48px 24px 80px; }
+    .wrap { max-width: 1200px; margin: 0 auto; }
+    h1 { font-family: var(--head); font-size: clamp(40px, 6vw, 72px); font-weight: 700; }
+    h1 i { color: var(--accent); font-style: normal; }
+    .lede { color: var(--muted); font-size: 19px; max-width: 720px; margin-top: 12px; line-height: 1.5; }
+    .steps { color: var(--faint); font-size: 15px; margin-top: 10px; }
+    button { margin-top: 24px; font: 600 16px var(--sans); color: var(--bg); background: var(--accent); border: 0; border-radius: 10px; padding: 14px 24px; cursor: pointer; }
+    .scroll { overflow-x: auto; max-width: 100%; margin-top: 36px; }
+    h2 { font-family: var(--head); font-size: 32px; font-weight: 600; margin: 64px 0 20px; }
+    .note { color: var(--faint); font-size: 14px; margin-top: 14px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Sterile<i>Voice</i></h1>
+    <p class="lede">A voice copilot for the operating room. It runs the WHO Surgical Safety Checklist by voice, reads back every critical event, guards against recorded allergies, and patches in a specialist, so the team never touches a screen.</p>
+    <p class="steps">Sample case: time-out with a skipped item → tourniquet read-back → allergy catch → "call vascular" → auto-drafted record.</p>
+    <button id="play">▶ Play a sample case</button>
+    <div class="scroll"><div id="board"></div></div>
+    <h2>The specialist's phone</h2>
+    <div class="scroll"><div id="call"></div></div>
+    <h2>The record writes itself</h2>
+    <div class="scroll"><div id="record"></div></div>
+    <p class="note">Concept prototype. The conversation is simulated; the real build runs on Agora Conversational AI.</p>
+  </div>
+  <script src="sv.js"></script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    SV.mountBoard($("board")); SV.mountCall($("call")); SV.mountRecord($("record"));
+    let start = null;
+    function frame(now) {
+      if (start == null) start = now;
+      const t = (now - start) / 1000;
+      SV.renderBoard($("board"), t);
+      SV.renderCall($("call"), t);
+      SV.renderRecord($("record"), t - 18);
+      if (t < 21) requestAnimationFrame(frame);
+    }
+    SV.renderBoard($("board"), -1);
+    SV.renderCall($("call"), 20);
+    SV.renderRecord($("record"), 10);
+    $("play").onclick = () => { start = null; requestAnimationFrame(frame); };
+  </script>
+</body>
+</html>
