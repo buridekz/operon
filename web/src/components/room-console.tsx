@@ -185,7 +185,7 @@ export function RoomConsole() {
   }
 
   // Pause: the room mic goes silent and the engine ignores speech, so the team can talk about
-  // ARNIE (or explain a demo) without it reacting. Press M, or say "ARNIE, pause listening".
+  // ARNIE (or explain a demo) without it reacting. Manual only: the Pause button or the M key.
   const [micMuted, setMicMuted] = useState(false);
   const paused = !!view?.paused || micMuted;
   async function togglePause() {
@@ -232,8 +232,6 @@ export function RoomConsole() {
     const text = rehearsal.trim();
     if (!text) return;
     setRehearsal("");
-    // A typed "ARNIE, resume" also undoes the pause button (which mutes the mic here).
-    if (paused && /\b(resume|wake up|start listening|unmute|i'?m back)\b/i.test(text)) return void (await togglePause());
     await engine("/api/simulate", { text });
   }
 
@@ -242,7 +240,7 @@ export function RoomConsole() {
   const lastArnie = view ? lastArnieLine(view) : undefined;
   const sev = lastArnie?.severity ?? "info";
   const line = paused
-    ? "Press M, or say “ARNIE, resume”, when you need me."
+    ? "Press M or Resume when you need me."
     : lastArnie?.text ?? "Say “ARNIE, brief me” to begin.";
 
   return (
