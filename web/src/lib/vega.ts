@@ -20,13 +20,12 @@ export function vegaState(v: EngineView | null, now: number | null): ArnieState 
   return v.agent.running ? "listening" : "off";
 }
 
-/** What the orb shows. Adds "thinking" (someone just spoke, no answer yet) and "paused" to ArnieState. */
-export type ArnieMood = "off" | "paused" | "listening" | "thinking" | "speaking" | "warning" | "critical";
+/** What the orb shows. Adds "thinking" (someone just spoke, no answer yet) to ArnieState. */
+export type ArnieMood = "off" | "listening" | "thinking" | "speaking" | "warning" | "critical";
 const THINK_MS = 4_000;
 
 export function arnieMood(v: EngineView | null, now: number | null): ArnieMood {
   if (!v || !now) return "off";
-  if (v.paused) return "paused";
   const s = vegaState(v, now);
   if (s !== "listening") return s;
   const lastHeard = [...v.transcript].reverse().find((t) => t.who === "heard");
@@ -38,7 +37,6 @@ export function arnieMood(v: EngineView | null, now: number | null): ArnieMood {
 /** The orb animation and the word under it, per mood. */
 export const MOOD: Record<ArnieMood, { orb: "listening" | "working" | "composing" | "breathing" | "solving"; word: string; color?: string }> = {
   off: { orb: "breathing", word: "Off" },
-  paused: { orb: "breathing", word: "Paused" },
   listening: { orb: "listening", word: "Listening" },
   thinking: { orb: "working", word: "Thinking" },
   speaking: { orb: "composing", word: "Speaking" },

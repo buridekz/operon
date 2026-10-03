@@ -64,7 +64,7 @@ function PhaseSteps({ v }: { v: EngineView }) {
 
 function ArnieStatus({ v, now }: { v: EngineView; now: number | null }) {
   const mood = arnieMood(v, now);
-  const dot = mood === "critical" ? "bg-critical" : mood === "warning" ? "bg-amber" : mood === "paused" || mood === "off" ? "bg-label-3" : "bg-teal";
+  const dot = mood === "critical" ? "bg-critical" : mood === "warning" ? "bg-amber" : mood === "off" ? "bg-label-3" : "bg-teal";
   return (
     <p className="flex items-center gap-2 text-[15px]" aria-live="polite">
       <span aria-hidden className={cn("size-2.5 rounded-full", dot, (mood === "listening" || mood === "thinking" || mood === "speaking") && "motion-safe:animate-pulse")} />
