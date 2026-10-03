@@ -175,8 +175,6 @@ const YES = /\b(confirm(ed)?|yes|yep|correct|complete(d)?|done|affirmative|marke
 const CONFIRM = /\b(confirm(ed)?|yes|correct|affirmative)\b/i;
 const NO = /\b(cancel|no,? wait|wrong|correction|negative|scratch that)\b/i;
 const QUESTION = /^(what|whats|what's|which|how many|how much|when|who|tell me|remind me|read( me)? back|any|is there|are there|do we have|list|check)\b|\?$/i;
-const PAUSE = /\b(pause|stop|mute)\s+(listening|yourself|the mic)\b|\bgo (to )?sleep\b|\bstand ?by\b|^mute\b|^pause$/i;
-const RESUME = /\b(resume|wake up|start listening|unmute|i'?m back|back on|listen up)\b|^listen\b/i;
 const ABOUT_ARNIE = /\b(your name|who are you|what are you|stand for|name mean|who(?:'s| is) arnie|what(?:'s| is) arnie|who made you|who built you|what can you do|how can you help|what do you do|introduce yourself|tell (?:me|us) about yourself|how are you|are you (?:there|listening|ready|awake)|thank(?:s| you)|good (?:morning|afternoon|evening|job)|hello|hi there)\b/i;
 const SKIP = /\b(skip|let'?s (just )?start|move on|later|no time|we'?re late|go ahead without)\b/i;
 export const SAY_AGAIN = "Sorry, say that again.";
@@ -759,15 +757,9 @@ export function handle(state: State, text: string, now: number, opts: Opts): Tur
     if (cmd && cmd.intent !== "conversation") { woke = true; body = rest; }
   }
 
-  // Paused: everything is ignored except "ARNIE, resume".
-  if (state.paused) {
-    if (woke && RESUME.test(body)) { state.paused = false; return "Listening."; }
-    return null;
-  }
-  if (woke && PAUSE.test(body)) {
-    state.paused = true;
-    return "Paused. Say ARNIE, resume, when you need me.";
-  }
+  // Paused: everything is ignored. Pausing and resuming are manual only (the Room's Pause button or
+  // M key), so nothing said in the room, a narration included, can pause or resume ARNIE.
+  if (state.paused) return null;
   // Only the name ("Hey ARNIE."): answer, and take the next sentence as addressed to ARNIE.
   if (woke && !/[a-z0-9]/i.test(body)) {
     state.attentionUntil = now + ATTENTION_MS;

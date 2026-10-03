@@ -98,34 +98,33 @@ describe("this scan's landmarks", () => {
   });
 });
 
-describe("pause listening", () => {
-  test("paused, ARNIE ignores everything (even a drug it would flag) until 'ARNIE, resume'", () => {
+describe("pause (manual only: the Room's Pause button / M key)", () => {
+  test("paused, ARNIE ignores everything, even a drug it would flag, and even 'ARNIE, resume'", () => {
     const s = createState({ allergies: ["penicillin"] });
-    expect(say(s, "pause listening")).toBe("Paused. Say ARNIE, resume, when you need me.");
-    expect(s.paused).toBe(true);
+    s.paused = true; // what POST /api/listen { paused: true } does
     expect(handle(s, "So if the nurse says giving ampicillin, ARNIE would warn the team.", T0, opts)).toBeNull();
     expect(say(s, "show the CT")).toBeNull();
-    expect(handle(s, "Resume", T0, opts)).toBeNull(); // without the wake word
+    expect(say(s, "resume")).toBeNull();
+    expect(s.paused).toBe(true);
     expect(s.log).toHaveLength(0);
-    expect(say(s, "resume")).toBe("Listening.");
+    s.paused = false; // the button again
     expect(handle(s, "Giving ampicillin", T0, opts)).toMatch(/^Caution: penicillin allergy/);
   });
 
-  test("other ways to say it", () => {
-    for (const p of ["stop listening", "go to sleep", "stand by", "mute"]) {
+  test("nothing said in the room pauses ARNIE", () => {
+    for (const p of ["pause listening", "stop listening", "go to sleep", "stand by", "mute", "pause"]) {
       const s = createState();
-      expect(say(s, p)).toMatch(/^Paused/);
-      expect(say(s, "I'm back")).toBe("Listening.");
+      say(s, p);
+      expect(s.paused).toBe(false);
     }
     const s = createState();
     say(s, "show the CT");
-    expect(say(s, "stop")).toBe(`Slice 40 of ${CT_STUDY.slices}.`); // "stop" alone is the CT, not a pause
-    expect(s.paused).toBe(false);
+    expect(say(s, "stop")).toBe(`Slice 40 of ${CT_STUDY.slices}.`); // "stop" alone is the CT
   });
 
   test("the board sees it", () => {
     const s = createState();
-    say(s, "stand by");
+    s.paused = true;
     expect(view(s, T0, opts).paused).toBe(true);
   });
 });
