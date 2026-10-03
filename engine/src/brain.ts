@@ -465,10 +465,37 @@ function checkMed(state: State, drug: string, dose: Dose | null, now: number): s
   return null;
 }
 
-/** Room speech not addressed to ARNIE. Silent unless a medication that was named conflicts with the record. */
-function overhear(state: State, heard: string, now: number): Turn {
+/** The team announcing the start or end of the operation, said to the room (not to ARNIE). Narrow on
+ *  purpose: an explicit "starting the operation", "incision", "closing", "ending the surgery". */
+const ANNOUNCE_START = /\b(?:start|begin|starting|beginning|commencing)\s+(?:the\s+)?(?:operation|surgery|procedure)\b|^(?:skin\s+)?incision(?:\s+now)?[.!]?$/i;
+const ANNOUNCE_END = /\b(?:end|finish|ending|finishing|concluding|close out|closing out)\s+(?:the\s+)?(?:operation|surgery|procedure)\b|\b(?:operation|surgery|procedure)\s+(?:is\s+)?(?:done|over|complete|completed|finished)\b|^closing(?:\s+now)?[.!]?$/i;
+
+/**
+ * Room speech not addressed to ARNIE. ARNIE acts like a scrub nurse keeping the record:
+ * - a medication named with an "administering" verb is checked against the chart; a conflict is a
+ *   caution, anything else is read back so it is logged once someone says "Confirmed";
+ * - the start or end of the operation, announced to the room, is read back the same way.
+ * Everything else said in the room stays unanswered.
+ */
+function overhear(state: State, heard: string, now: number, opts: Opts): Turn {
   const med = findMedMention(heard);
-  if (med) return med.negated ? null : checkMed(state, med.drug, med.dose, now);
+  if (med) {
+    if (med.negated) return null;
+    const warn = checkMed(state, med.drug, med.dose, now);
+    if (warn) return warn;
+    if (state.pending || state.checklist) return null; // don't talk over a read-back or a checklist question
+    state.pending = { kind: "drug", drug: med.drug, dose: med.dose, at: now };
+    return `${cap(med.drug)}${med.dose ? ` ${fmtDose(med.dose)}` : ""}, ${clock(now)}. Confirm?`;
+  }
+  if (!state.pending && !state.checklist) {
+    const t = normalizeHeard(heard).trim();
+    if (ANNOUNCE_START.test(t) && state.milestones.incision == null) {
+      return applyIntent(state, { ...EMPTY_INTENT, intent: "milestone", milestone: "incision" }, now, opts);
+    }
+    if (ANNOUNCE_END.test(t) && state.milestones.incision != null && state.milestones.closure == null) {
+      return applyIntent(state, { ...EMPTY_INTENT, intent: "milestone", milestone: "closure" }, now, opts);
+    }
+  }
   if (state.case.allergies.length && unknownDrugWord(heard)) return { screen: heard };
   return null;
 }
@@ -766,10 +793,10 @@ export function handle(state: State, text: string, now: number, opts: Opts): Tur
     return "I'm here.";
   }
 
-  // The team talking to each other, not to ARNIE: it stays out of it unless a medication that was
-  // named conflicts with the case record (an allergy, or a dose that differs from the order).
+  // The team talking to each other, not to ARNIE: it keeps the record of what they do (drugs given,
+  // start and end of the operation) and speaks up when a drug conflicts with the chart.
   if (!woke) {
-    const heardMed = overhear(state, heard, now);
+    const heardMed = overhear(state, heard, now, opts);
     if (heardMed) return heardMed;
   }
 

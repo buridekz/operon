@@ -39,18 +39,58 @@ describe("overhearing the team (no wake word)", () => {
   test("a dose that differs from the ordered dose is flagged; the same dose is not", () => {
     const s = chart();
     expect(handle(s, "Giving cefazolin 20 grams", T0, opts)).toBe("Caution: cefazolin is ordered at 2 grams in the case record. 20 grams was stated. Not logged.");
-    expect(handle(s, "Pushing cefazolin, two grams", T0, opts)).toBeNull();
-    expect(handle(s, "Giving cefazolin 2000 milligrams", T0, opts)).toBeNull(); // same dose, different unit
+    // the matching dose is not a conflict: it is read back to be logged (2 g = 2000 mg)
+    expect(handle(s, "Pushing cefazolin, two grams", T0, opts)).toBe("Cefazolin 2 grams, 14:20. Confirm?");
+    expect(handle(s, "Cancel", T0, opts)).toBe("Cancelled. Say it again.");
+    expect(handle(s, "Giving cefazolin 2000 milligrams", T0, opts)).toBe("Cefazolin 2 grams, 14:20. Confirm?");
+    expect(handle(s, "Cancel", T0, opts)).toBe("Cancelled. Say it again.");
     expect(handle(s, "Giving cefazolin 200 mg", T0, opts)).toMatch(/^Caution: cefazolin is ordered at 2 grams/);
-    expect(handle(s, "Giving cefazolin", T0, opts)).toBeNull(); // no dose said: nothing to compare
+    expect(handle(s, "Giving cefazolin", T0, opts)).toBe("Cefazolin, 14:20. Confirm?"); // no dose said: nothing to compare
   });
 
-  test("silent when nothing conflicts, and nothing is logged by overhearing", () => {
+  test("a drug given with no conflict is read back, and logged once confirmed", () => {
     const s = chart();
-    expect(handle(s, "Giving vancomycin one gram", T0, opts)).toBeNull();
+    expect(handle(s, "Giving vancomycin one gram", T0, opts)).toBe("Vancomycin 1 gram, 14:20. Confirm?");
+    expect(s.log).toHaveLength(0); // nothing logged until a person confirms
+    expect(handle(s, "Confirmed.", T0, opts)).toBe("Logged.");
+    expect(s.log.at(-1)).toMatchObject({ kind: "drug", text: "Vancomycin 1 gram given" });
     expect(handle(s, "Can I get more suction here?", T0, opts)).toBeNull();
     expect(handle(s, "Hand me the scalpel", T0, opts)).toBeNull();
-    expect(s.log).toHaveLength(0);
+  });
+
+  test("a drug isn't read back over another read-back or a checklist question", () => {
+    const s = chart();
+    handle(s, "Giving vancomycin one gram", T0, opts);
+    expect(handle(s, "Giving metronidazole 500 mg", T0, opts)).toBeNull();
+    expect(handle(s, "Confirmed", T0, opts)).toBe("Logged.");
+    const c = chart();
+    handle(c, "ARNIE, start time out", T0, opts);
+    expect(handle(c, "Giving vancomycin one gram", T0 + GAP, opts)).toBeNull();
+  });
+
+  test("starting and ending the operation, announced to the room", () => {
+    const s = chart();
+    expect(handle(s, "Okay team, starting the operation.", T0, opts)).toBe("Operation start, incision, 14:20. Confirm?");
+    expect(handle(s, "Confirmed.", T0, opts)).toBe("Logged. Operation started at 14:20.");
+    expect(handle(s, "Starting the operation", T0 + MIN, opts)).toBeNull(); // already started
+    expect(handle(s, "Alright, closing.", T0 + 30 * MIN, opts)).toBeNull(); // "closing" with words before it isn't the announcement
+    expect(handle(s, "Closing.", T0 + 30 * MIN, opts)).toBe("Operation end, closure, 14:50. Confirm?");
+    expect(handle(s, "Confirmed.", T0 + 30 * MIN, opts)).toBe("Logged. Operation ended at 14:50, after 30 minutes, from 14:20 to 14:50.");
+    const t = chart();
+    expect(handle(t, "Incision.", T0, opts)).toBe("Operation start, incision, 14:20. Confirm?");
+    const u = chart();
+    handle(u, "Beginning the surgery now", T0, opts); handle(u, "Confirmed", T0, opts);
+    expect(handle(u, "We're ending the procedure", T0 + 5 * MIN, opts)).toBe("Operation end, closure, 14:25. Confirm?");
+  });
+
+  test("ordinary talk doesn't start or end anything", () => {
+    const s = chart();
+    for (const t of ["The incision looks clean", "We're starting to see some bleeding", "Closing the gap on that vessel",
+      "Is the surgery room ready?", "Let's start", "The patient is done with the scan"]) {
+      expect(handle(s, t, T0, opts)).toBeNull();
+    }
+    expect(s.pending).toBeNull();
+    expect(s.milestones).toEqual({});
   });
 
   test("the team talking a drug down is not an order", () => {
