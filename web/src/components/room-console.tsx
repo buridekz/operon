@@ -101,6 +101,7 @@ export function RoomConsole() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [micOn, setMicOn] = useState(false);
+  const [denoise, setDenoise] = useState(false);
   const [heardSomething, setHeardSomething] = useState(false);
   const [level, setLevel] = useState(0);
   const [audio, setAudio] = useState<AudioContext | null>(null);
@@ -143,6 +144,7 @@ export function RoomConsole() {
     try {
       await callRef.current?.leave();
       callRef.current = await joinChannel("room");
+      setDenoise(callRef.current.denoise);
       setMicOn(true);
     } catch (err) {
       setError(`Couldn't open the microphone: ${(err as Error).message}`);
@@ -256,6 +258,11 @@ export function RoomConsole() {
                   </div>
                   <p className={cn("flex items-center gap-2", heardSomething ? "text-teal" : "text-muted-foreground")} aria-live="polite">
                     {heardSomething ? <><Check className="size-4" aria-hidden /> Microphone is working.</> : "Say a few words. The bar should move."}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {denoise
+                      ? "AI noise suppression is on: background noise and nearby voices are filtered."
+                      : "AI noise suppression isn't available in this browser. Use desktop Chrome or Edge for a noisy room."}
                   </p>
                 </>
               )}

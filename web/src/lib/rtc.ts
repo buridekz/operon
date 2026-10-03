@@ -8,8 +8,38 @@ import { engine } from "./engine";
 export type Call = {
   client: IAgoraRTCClient;
   mic: IMicrophoneAudioTrack;
+  /** Agora AI noise suppression is filtering this mic. */
+  denoise: boolean;
   leave: () => Promise<void>;
 };
+
+type AgoraRTCModule = (typeof import("agora-rtc-sdk-ng"))["default"];
+type Denoiser = import("agora-extension-ai-denoiser").AIDenoiserExtension;
+let denoiser: Promise<Denoiser | null> | null = null;
+
+/** Agora AI noise suppression on the room mic: background noise and nearby voices are filtered
+ *  before Vega hears them. Desktop browsers only; if it can't run, the mic works as before. */
+async function suppressNoise(AgoraRTC: AgoraRTCModule, mic: IMicrophoneAudioTrack): Promise<boolean> {
+  try {
+    denoiser ??= import("agora-extension-ai-denoiser").then(({ AIDenoiserExtension }) => {
+      const ext = new AIDenoiserExtension({ assetsPath: "/denoiser" }); // wasm copied to public/denoiser
+      if (!ext.checkCompatibility()) return null;
+      AgoraRTC.registerExtensions([ext]);
+      return ext;
+    });
+    const ext = await denoiser;
+    if (!ext) return false;
+    const processor = ext.createProcessor();
+    mic.pipe(processor).pipe(mic.processorDestination);
+    await processor.enable();
+    await processor.setMode("NSNG"); // AI mode (STATIONARY_NS only removes steady hum)
+    await processor.setLevel("AGGRESSIVE");
+    return true;
+  } catch (e) {
+    console.warn("[noise suppression] off:", (e as Error).message);
+    return false;
+  }
+}
 
 export async function joinChannel(
   role: "room" | "specialist",
@@ -27,8 +57,10 @@ export async function joinChannel(
 
   await client.join(appId, channel, token, uid);
   let mic: IMicrophoneAudioTrack | undefined;
+  let denoise = false;
   try {
     mic = await AgoraRTC.createMicrophoneAudioTrack({ AEC: true, ANS: true, AGC: true });
+    if (role === "room") denoise = await suppressNoise(AgoraRTC, mic);
     await client.publish([mic]);
   } catch (e) {
     // Mic blocked or missing: leave cleanly so the caller can show the error and try again.
@@ -40,6 +72,7 @@ export async function joinChannel(
   return {
     client,
     mic,
+    denoise,
     leave: async () => {
       mic.close();
       await client.leave().catch(() => {});

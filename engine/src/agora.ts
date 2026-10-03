@@ -9,6 +9,8 @@ export type AgoraConfig = {
   appId: string; appCert: string; channel: string; publicUrl: string; llmKey: string;
   agentUid: number; roomUid: number; specialistUid: number;
   asrLanguage: string; ttsPreset: string; ttsVoice: string;
+  /** Selective Attention Locking (beta): lock onto the main speaker, block other nearby voices. */
+  speakerLock: boolean;
 };
 
 export function rtcRtmToken(cfg: AgoraConfig, uid: number, ttlSeconds = 86400): string {
@@ -42,7 +44,11 @@ export function startAgent(cfg: AgoraConfig) {
       agent_rtc_uid: String(cfg.agentUid),
       remote_rtc_uids: [String(cfg.roomUid)], // the single room mic; the specialist is not processed
       idle_timeout: 120,
-      advanced_features: { enable_rtm: true },
+      advanced_features: { enable_rtm: true, enable_sal: cfg.speakerLock },
+      ...(cfg.speakerLock ? { sal: { sal_mode: "locking" } } : {}),
+      // Vega always finishes its sentence: a nearby voice can't cut off a read-back or an alert.
+      // Speech during Vega's turn is handled after it ("append"), so an early "Confirmed" still counts.
+      interruption: { enable: false, disabled_config: { strategy: "append" } },
       parameters: { data_channel: "rtm", enable_error_message: true },
       asr: { vendor: "ares", language: cfg.asrLanguage },
       tts: cfg.ttsPreset.startsWith("openai")
@@ -71,9 +77,9 @@ export function startAgent(cfg: AgoraConfig) {
   });
 }
 
-/** Make the agent say exact text (scripted lines and alerts). */
+/** Make the agent say exact text (scripted lines and alerts). Never cut off by room speech. */
 export function speak(cfg: AgoraConfig, agentId: string, text: string, priority: "INTERRUPT" | "APPEND" | "IGNORE" = "APPEND") {
-  return call(cfg, `/agents/${agentId}/speak`, { text: text.slice(0, 500), priority, interruptable: priority !== "INTERRUPT" });
+  return call(cfg, `/agents/${agentId}/speak`, { text: text.slice(0, 500), priority, interruptable: false });
 }
 
 export async function stopAgent(cfg: AgoraConfig, agentId: string) {

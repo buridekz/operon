@@ -20,6 +20,7 @@ const cfg: AgoraConfig = {
   asrLanguage: process.env.ASR_LANGUAGE || "en-US",
   ttsPreset: process.env.TTS_PRESET || "openai_tts_1",
   ttsVoice: process.env.TTS_VOICE || "coral",
+  speakerLock: process.env.SPEAKER_LOCK !== "off",
 };
 const port = Number(process.env.PORT || 3000);
 const opts: Opts = { minuteMs: Number(process.env.DEMO_MINUTE_MS || 60000), alertMinutes: [60, 90, 120] };
