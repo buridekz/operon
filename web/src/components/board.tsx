@@ -1,22 +1,21 @@
 "use client";
 
+// The wall board: a quiet bento read in a second from across the room. Everything is white and
+// grey; only an alert carries color (system red / yellow), and the focus tile changes with the case.
+import type * as React from "react";
 import { useEffect, useState } from "react";
-import { AlertTriangle, CheckCircle2, OctagonAlert, PhoneCall, Volume2, VolumeX } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AlertTriangle, Check, OctagonAlert, PhoneCall, Volume2, VolumeX } from "lucide-react";
+import { ArnieOrb } from "@/components/arnie-orb";
 import { CtViewer, loadCt } from "@/components/ct-viewer";
-import { Logo, ArnieRing } from "@/components/vega-ring";
+import { Logo } from "@/components/vega-ring";
 import { cn } from "@/lib/utils";
 import { mmss, pad2, type ChecklistView, type EngineView, type Severity } from "@/lib/engine";
 import { useEngineState } from "@/lib/use-engine";
 import { useEarcons } from "@/lib/earcons";
-import { phaseTicks, vegaState } from "@/lib/vega";
+import { MOOD, arnieMood, lastArnieLine } from "@/lib/vega";
 
-type ChecklistKey = keyof EngineView["checklists"];
-const ALERT_MS = 12_000;
-
-const severityText: Record<Severity, string> = { info: "text-teal", warning: "text-amber", critical: "text-critical" };
-const severityBorder: Record<Severity, string> = { info: "border-teal", warning: "border-amber", critical: "border-critical" };
+const ALERT_MS = 15_000;
+const sentence = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 function useNow() {
   const [now, setNow] = useState<number | null>(null);
@@ -29,271 +28,254 @@ function useNow() {
   return now;
 }
 
-// ---------- Header ----------
-const STEPS: { key: ChecklistKey | "surgery"; label: string }[] = [
-  { key: "signin", label: "Sign in" },
-  { key: "timeout", label: "Time out" },
-  { key: "surgery", label: "Surgery" },
-  { key: "signout", label: "Sign out" },
-];
-
-function PhaseStepper({ v }: { v: EngineView }) {
-  const done = (key: (typeof STEPS)[number]["key"]) =>
-    key === "surgery" ? v.checklists.signout.complete || v.phase === "signout" : v.checklists[key].complete;
+function Tile({ area, label, className, children, style }: { area: string; label: string; className?: string; children: React.ReactNode; style?: React.CSSProperties }) {
   return (
-    <ol className="flex flex-wrap items-center gap-1.5" aria-label="Case phase">
-      {STEPS.map((s, i) => {
-        const current = v.phase === s.key;
-        return (
-          <li key={s.key} className="flex items-center gap-1.5">
-            <span
-              aria-current={current ? "step" : undefined}
-              className={cn(
-                "rounded-md px-2.5 py-1 font-mono text-xs font-semibold uppercase tracking-[0.08em]",
-                current ? "bg-teal text-background" : done(s.key) ? "bg-teal-soft text-teal" : "text-muted-foreground",
-              )}
-            >
-              {done(s.key) && !current ? "✓ " : ""}{s.label}
-            </span>
-            {i < STEPS.length - 1 && <span aria-hidden className="text-muted-foreground">›</span>}
-          </li>
-        );
-      })}
-    </ol>
+    <section aria-label={label} style={{ gridArea: area, ...style }} className={cn("tile flex min-h-0 min-w-0 flex-col p-6", className)}>
+      {children}
+    </section>
   );
 }
 
-function AlertBanner({ v, now }: { v: EngineView; now: number | null }) {
-  const last = [...v.transcript].reverse().find((t) => t.who === "sv" && t.severity && t.severity !== "info");
-  if (!last || !now || now - last.at > ALERT_MS) return null;
-  const critical = last.severity === "critical";
-  const Icon = critical ? OctagonAlert : AlertTriangle;
+const caption = "text-[15px] text-label-2";
+
+// ---------- Patient ----------
+function PatientTile({ v }: { v: EngineView }) {
   return (
-    <div
-      role="alert"
-      className={cn(
-        "flex items-center gap-4 rounded-xl border-2 px-5 py-4",
-        critical ? "alarm-pulse border-critical bg-critical-soft text-critical" : "border-amber bg-amber-soft text-amber",
-      )}
-    >
-      <Icon className="size-9 shrink-0" aria-hidden />
-      <div>
-        <p className="font-mono text-xs font-bold uppercase tracking-[0.14em]">{critical ? "Critical" : "Warning"}</p>
-        <p className="font-heading text-2xl font-semibold leading-tight sm:text-3xl">{last.text.replace(/^Logged.s*/, "")}</p>
-      </div>
-    </div>
+    <Tile area="patient" label="Patient" className="justify-center">
+      <h1 className="truncate text-[34px] font-semibold leading-tight tracking-[-0.02em]">{v.case.patient}</h1>
+      <p className="mt-1 truncate text-[17px] text-label-2">{v.case.summary}</p>
+      <p className="mt-0.5 truncate text-[17px] text-label-2">{v.case.procedure} · {v.case.site}</p>
+    </Tile>
   );
 }
 
-// ---------- Hero panels ----------
-function ChecklistHero({ list, active }: { list: ChecklistView; active: boolean }) {
-  const status = list.complete ? "Complete" : list.blocked ? "Blocked" : active ? "In progress" : "Not started";
-  return (
-    <Card className={cn("h-full", list.blocked && "ring-2 ring-amber")}>
-      <CardHeader>
-        <CardTitle className="font-heading text-4xl font-semibold">{list.title}</CardTitle>
-        <CardAction>
-          <Badge variant="secondary" className={cn("h-7 px-3 font-mono text-sm", list.complete && "bg-teal-soft text-teal", list.blocked && "bg-amber-soft text-amber")}>
-            {status}
-          </Badge>
-        </CardAction>
-      </CardHeader>
-      <CardContent>
-        <ul className="space-y-3">
-          {list.items.map((it) => (
-            <li
-              key={it.label}
-              className={cn(
-                "flex items-center gap-4 rounded-lg px-3 py-2.5 text-2xl",
-                it.status === "active" && "bg-secondary ring-2 ring-teal",
-                it.status === "blocked" && "bg-amber-soft text-amber ring-2 ring-amber",
-                it.status === "pending" && "text-muted-foreground",
-              )}
-            >
-              <span
-                aria-hidden
-                className={cn(
-                  "grid size-9 shrink-0 place-items-center rounded-lg border-2 text-lg font-bold",
-                  it.status === "ok" && "border-teal bg-teal text-background",
-                  it.status === "blocked" && "border-amber",
-                  it.status === "active" && "border-teal text-teal",
-                )}
-              >
-                {it.status === "ok" ? "✓" : it.status === "blocked" ? "!" : it.status === "active" ? "•" : ""}
-              </span>
-              <span className="flex-1">{it.label}</span>
-              {it.status === "active" && <span className="font-mono text-sm text-teal">◀ now</span>}
-              {it.status === "blocked" && <span className="font-mono text-sm font-bold">NOT CONFIRMED</span>}
-              <span className="sr-only">{it.status}</span>
-            </li>
-          ))}
-        </ul>
-      </CardContent>
-    </Card>
-  );
-}
-
-function CountRow({ label, opened, counted }: { label: string; opened: number; counted?: number }) {
-  const mismatch = counted !== undefined && counted !== opened;
-  return (
-    <div className="grid grid-cols-[1fr_auto_auto] items-baseline gap-6 py-2">
-      <span className="text-lg">{label}</span>
-      <span className="font-mono text-sm text-muted-foreground">opened <b className="text-2xl text-foreground">{opened}</b></span>
-      <span className={cn("font-mono text-sm text-muted-foreground", mismatch && "text-critical")}>
-        counted <b className={cn("text-2xl", mismatch ? "text-critical" : "text-foreground")}>{counted ?? "—"}</b>
-      </span>
-    </div>
-  );
-}
-
-function SurgeryHero({ v }: { v: EngineView }) {
+// ---------- Operation clock ----------
+function ClockTile({ v }: { v: EngineView }) {
+  const op = v.operation;
   const tq = v.tourniquet;
   const tqLevel: Severity | null = !tq ? null : tq.seconds >= 7200 ? "critical" : tq.seconds >= 3600 ? "warning" : "info";
-  const c = v.counts;
   return (
-    <div className="grid h-full gap-4 md:grid-cols-2">
-      <Card className={cn(tqLevel === "warning" && "ring-2 ring-amber", tqLevel === "critical" && "ring-2 ring-critical")}>
-        <CardHeader><CardTitle className="text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">Tourniquet{tq ? ` · ${tq.side}` : ""}</CardTitle></CardHeader>
-        <CardContent>
-          <p className={cn("font-mono text-7xl font-semibold tabular-nums", tqLevel ? severityText[tqLevel] : "text-muted-foreground")}>
-            {tq ? mmss(tq.seconds) : "--:--"}
-          </p>
-          <p className="mt-2 text-sm text-muted-foreground">Alerts at 60, 90 and 120 minutes</p>
-        </CardContent>
-      </Card>
+    <Tile area="clock" label="Operation" className="justify-center">
+      {!op ? (
+        <>
+          <p className="text-[28px] font-semibold leading-tight text-label-2">Not started</p>
+          <p className="mt-1 text-[13px] text-label-3">&ldquo;ARNIE, start the operation&rdquo;</p>
+        </>
+      ) : (
+        <>
+          <p className="text-[28px] font-semibold leading-tight tracking-[-0.01em]">{sentence(op.duration)}</p>
+          <p className="tnum mt-1 text-[15px] text-label-2">{op.end ? `${op.start} – ${op.end} · done` : `Operating since ${op.start}`}</p>
+        </>
+      )}
+      {tq && (
+        <p className={cn("tnum mt-3 text-[15px]", tqLevel === "critical" ? "text-critical" : tqLevel === "warning" ? "text-amber" : "text-label-2")}>
+          Tourniquet {tq.side} · {mmss(tq.seconds)}
+        </p>
+      )}
+    </Tile>
+  );
+}
 
-      <Card className={cn(c.status === "mismatch" && "ring-2 ring-critical")}>
-        <CardHeader>
-          <CardTitle className="text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">Counts</CardTitle>
-          <CardAction>
-            <Badge
-              variant="secondary"
-              className={cn("font-mono", c.status === "reconciled" && "bg-teal-soft text-teal", c.status === "mismatch" && "bg-critical-soft text-critical")}
-            >
-              {c.status === "none" ? "Nothing opened" : c.status === "open" ? "Final count pending" : c.status === "reconciled" ? "Reconciled" : "Mismatch"}
-            </Badge>
-          </CardAction>
-        </CardHeader>
-        <CardContent className="divide-y">
-          <CountRow label="Sponges" opened={c.opened.sponge} counted={c.final?.sponge} />
-          <CountRow label="Needles" opened={c.opened.needle} counted={c.final?.needle} />
-          {c.missing.length > 0 && <p className="pt-2 font-semibold text-critical">⚠ {c.missing.join(", ")}</p>}
-        </CardContent>
-      </Card>
+// ---------- ARNIE ----------
+function ArnieTile({ v, now }: { v: EngineView; now: number | null }) {
+  const mood = arnieMood(v, now);
+  const m = MOOD[mood];
+  const last = lastArnieLine(v);
+  const heard = [...v.transcript].reverse().find((t) => t.who === "heard");
+  const quiet = mood === "paused" || mood === "off";
+  return (
+    <Tile area="arnie" label="ARNIE" className="items-center text-center">
+      <div className="flex flex-1 flex-col items-center justify-center">
+        <ArnieOrb state={m.orb} size={176} color={m.color} speed={quiet ? 0.25 : 1} label={`ARNIE: ${m.word}`} className={cn("transition-opacity duration-700", quiet && "opacity-35")} />
+        <p className={cn("mt-6 text-[28px] font-semibold tracking-[-0.02em]", mood === "critical" && "text-critical", mood === "warning" && "text-amber", quiet && "text-label-2")} aria-live="polite">
+          {m.word}
+        </p>
+        <p className={cn("mt-3 line-clamp-4 text-[19px] leading-relaxed text-label-2", last?.severity === "critical" && "text-critical", last?.severity === "warning" && "text-amber")}>
+          {last?.text ?? "Ready when you are."}
+        </p>
+      </div>
+      {heard && <p className="mt-4 line-clamp-1 w-full text-[13px] text-label-3" title="What ARNIE last heard">&ldquo;{heard.text}&rdquo;</p>}
+    </Tile>
+  );
+}
 
-      <Card>
-        <CardHeader><CardTitle className="text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">Operation</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-3 gap-4">
-          {([["Start", v.operation?.start], ["End", v.operation?.end]] as const).map(([label, time]) => (
-            <div key={label}>
-              <p className="text-sm text-muted-foreground">{label}</p>
-              <p className="font-mono text-3xl font-semibold">{time ?? "--:--"}</p>
-            </div>
-          ))}
-          <div>
-            <p className="text-sm text-muted-foreground">{v.operation?.end ? "Duration" : "Running"}</p>
-            <p className="text-xl font-semibold leading-tight">{v.operation?.duration ?? "--"}</p>
+// ---------- Alerts: calm until something is wrong ----------
+function activeAlert(v: EngineView, now: number | null): { sev: Exclude<Severity, "info">; text: string; time?: string } | null {
+  const last = [...v.transcript].reverse().find((t) => t.who === "sv" && t.severity && t.severity !== "info");
+  if (last && now && now - last.at < ALERT_MS) {
+    return { sev: last.severity as Exclude<Severity, "info">, text: sentence(last.text.replace(/^(Caution|Please verify):\s*/, "").replace(/^Logged\.\s*/, "")) };
+  }
+  if (v.counts.status === "mismatch") return { sev: "critical", text: `Count not reconciled: ${v.counts.missing.join(", ")}.` };
+  return null;
+}
+
+function AlertTile({ v, now }: { v: EngineView; now: number | null }) {
+  const a = activeAlert(v, now);
+  const caught = v.log.filter((l) => l.kind === "alert" && /held|flagged/.test(l.text)).length;
+  if (!a) {
+    return (
+      <Tile area="alerts" label="Alerts" className="justify-center">
+        <p className="flex items-center gap-2 text-[22px] font-semibold"><Check className="size-6 text-label-2" aria-hidden />All clear</p>
+        <p className="mt-1 text-[15px] text-label-2">
+          {caught ? `${caught} ${caught === 1 ? "mistake" : "mistakes"} caught this case.` : "Listening for allergy and dose conflicts."}
+        </p>
+      </Tile>
+    );
+  }
+  const critical = a.sev === "critical";
+  const Icon = critical ? OctagonAlert : AlertTriangle;
+  return (
+    <Tile
+      area="alerts"
+      label={critical ? "Critical alert" : "Warning"}
+      className={cn("tile-alert-in justify-center", critical ? "text-white" : "text-black")}
+      style={{ background: critical ? "var(--critical)" : "var(--amber)" }}
+    >
+      <div role="alert" key={a.text}>
+        <p className="flex items-center gap-2 text-[17px] font-semibold"><Icon className="size-5" aria-hidden />{critical ? "Critical" : "Warning"}</p>
+        <p className="mt-2 line-clamp-4 text-[24px] font-semibold leading-snug tracking-[-0.01em]">{a.text}</p>
+      </div>
+    </Tile>
+  );
+}
+
+// ---------- Chart: what ARNIE checks what it hears against ----------
+function ChartTile({ v }: { v: EngineView }) {
+  const labs = Object.entries(v.case.preop).filter(([, val]) => val);
+  const rows: [string, React.ReactNode][] = [
+    ["Allergies", v.case.allergies.length
+      ? <span className="flex flex-wrap justify-end gap-x-3">{v.case.allergies.map((a) => (
+        <span key={a} className="inline-flex items-center gap-1.5"><span aria-hidden className="size-2 rounded-full bg-critical" />{sentence(a)}</span>
+      ))}</span>
+      : "None recorded"],
+    ["Ordered", v.case.orders.length ? v.case.orders.join(", ") : "None recorded"],
+    ...labs.map(([k, val]) => [`Pre-op ${k}`, val] as [string, React.ReactNode]),
+  ];
+  return (
+    <Tile area="chart" label="Chart" className="justify-center">
+      <dl className="divide-y divide-white/[0.08]">
+        {rows.map(([k, val]) => (
+          <div key={k} className="flex items-baseline justify-between gap-4 py-2 first:pt-0 last:pb-0">
+            <dt className={caption}>{k}</dt>
+            <dd className="text-right text-[17px]">{val}</dd>
           </div>
-        </CardContent>
-      </Card>
+        ))}
+      </dl>
+    </Tile>
+  );
+}
 
-      <Card>
-        <CardHeader><CardTitle className="text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">Implants</CardTitle></CardHeader>
-        <CardContent>
-          {v.implants.length === 0 ? (
-            <p className="text-muted-foreground">None recorded.</p>
-          ) : (
-            <ul className="space-y-1.5">
-              {v.implants.map((im) => (
-                <li key={`${im.time}-${im.name}`} className="flex gap-3 text-lg">
-                  <span className="font-mono text-sm text-muted-foreground">{im.time}</span>
-                  <span>{im.name}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+// ---------- Focus: the one thing that matters now ----------
+function ChecklistFocus({ list }: { list: ChecklistView }) {
+  return (
+    <div className="flex h-full flex-col">
+      <h2 className="text-[34px] font-semibold tracking-[-0.02em]">{list.title}</h2>
+      <p className={cn("mt-1 text-[17px]", list.blocked ? "text-amber" : "text-label-2")}>
+        {list.complete ? "Complete" : list.blocked ? "Blocked until confirmed" : "ARNIE is asking each item out loud"}
+      </p>
+      <ul className="mt-6 divide-y divide-white/[0.08]">
+        {list.items.map((it) => (
+          <li key={it.label} className={cn("flex items-center gap-4 py-4 text-[24px]", it.status === "pending" && "text-label-3", it.status === "blocked" && "text-amber")}>
+            <span
+              aria-hidden
+              className={cn(
+                "grid size-8 shrink-0 place-items-center rounded-full border-2",
+                it.status === "ok" ? "border-foreground bg-foreground text-black" : it.status === "blocked" ? "border-amber" : it.status === "active" ? "border-foreground" : "border-label-3",
+              )}
+            >
+              {it.status === "ok" && <Check className="size-5" strokeWidth={3} />}
+              {it.status === "active" && <span className="size-2.5 rounded-full bg-foreground" />}
+            </span>
+            <span className="flex-1">{it.label}</span>
+            <span className="sr-only">{it.status}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
 
-function ConsultHero({ v }: { v: EngineView }) {
+function ConsultFocus({ v }: { v: EngineView }) {
   const c = v.consult!;
   const brief = [...v.transcript].reverse().find((t) => t.who === "sv" && t.text.startsWith(c.doctor));
   return (
-    <Card className="h-full ring-2 ring-teal">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-3 font-heading text-4xl font-semibold">
-          <PhoneCall className="size-8 text-teal" aria-hidden />
-          {c.doctor}
-        </CardTitle>
-        <CardAction>
-          <Badge className="h-7 bg-teal-soft px-3 font-mono text-sm text-teal">{c.state === "ringing" ? "Ringing…" : "Live consult"}</Badge>
-        </CardAction>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <p className="text-xl capitalize text-muted-foreground">{c.specialty} · {v.case.room}</p>
-        {brief ? (
-          <blockquote className="rounded-lg bg-teal-soft px-5 py-4 text-2xl leading-snug">
-            <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.1em] text-teal">Briefing from the confirmed log</span>
-            {brief.text}
-          </blockquote>
-        ) : (
-          <p className="text-xl text-muted-foreground">The specialist&apos;s phone is ringing. ARNIE will brief them when they answer.</p>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function IdleHero() {
-  return (
-    <Card className="h-full justify-center">
-      <CardContent className="space-y-3 text-center">
-        <p className="font-heading text-4xl font-semibold">Ready</p>
-        <p className="text-xl text-muted-foreground">Say &ldquo;ARNIE, brief me&rdquo; or &ldquo;ARNIE, start the operation&rdquo;.</p>
-      </CardContent>
-    </Card>
-  );
-}
-
-function Hero({ v }: { v: EngineView }) {
-  if (v.imaging?.visible) {
-    return (
-      <Card className="h-full">
-        <CardContent className="mx-auto w-full max-w-[min(100%,72vh)]">
-          <CtViewer imaging={v.imaging} />
-          <p className="mt-3 text-center text-sm text-muted-foreground">&ldquo;ARNIE, go to the knee · bone window · coronal view · play through · zoom in&rdquo;</p>
-        </CardContent>
-      </Card>
-    );
-  }
-  if (v.consult && v.consult.state !== "ended") return <ConsultHero v={v} />;
-  if (v.phase === "signin" || v.phase === "timeout" || v.phase === "signout") return <ChecklistHero list={v.checklists[v.phase]} active />;
-  if (v.phase === "surgery" || v.phase === "done") return <SurgeryHero v={v} />;
-  return <IdleHero />;
-}
-
-// What ARNIE checks what it hears against: the allergies and medication orders on the chart.
-function ChartStrip({ v }: { v: EngineView }) {
-  const { allergies, orders } = v.case;
-  const label = "text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground";
-  return (
-    <div className="flex flex-wrap items-center gap-x-8 gap-y-2 text-sm" aria-label="Chart">
-      <p className="flex flex-wrap items-center gap-2">
-        <span className={label}>Allergies</span>
-        {allergies.length
-          ? allergies.map((a) => <span key={a} className="rounded-md bg-critical-soft px-2 py-0.5 font-medium text-critical">{a}</span>)
-          : <span className="text-muted-foreground">None recorded</span>}
+    <div className="flex h-full flex-col justify-center">
+      <PhoneCall className={cn("size-10", c.state === "ringing" && "motion-safe:animate-pulse")} aria-hidden />
+      <h2 className="mt-6 text-[44px] font-semibold leading-tight tracking-[-0.03em]">{c.doctor}</h2>
+      <p className="mt-1 text-[20px] capitalize text-label-2">{c.specialty} · {c.state === "ringing" ? "calling…" : "on the line"}</p>
+      <p className="mt-8 max-w-2xl text-[22px] leading-relaxed text-label-2">
+        {brief ? brief.text : "ARNIE will brief them from the chart when they answer."}
       </p>
-      {orders.length > 0 && (
-        <p className="flex flex-wrap items-center gap-2">
-          <span className={label}>Ordered</span>
-          {orders.map((o) => <span key={o} className="rounded-md bg-secondary px-2 py-0.5 text-foreground">{o}</span>)}
+    </div>
+  );
+}
+
+function SummaryFocus({ v }: { v: EngineView }) {
+  const op = v.operation;
+  return (
+    <div className="flex h-full flex-col justify-center">
+      <h2 className="text-[34px] font-semibold tracking-[-0.02em]">Case summary</h2>
+      {op && <p className="tnum mt-2 text-[22px] text-label-2">{op.start} – {op.end ?? "now"} · {sentence(op.duration)}</p>}
+      <p className="mt-6 max-w-3xl text-[22px] leading-relaxed">{v.summary!.text}</p>
+    </div>
+  );
+}
+
+function TimelineFocus({ v }: { v: EngineView }) {
+  const rows = v.log.slice(-8);
+  const c = v.counts;
+  return (
+    <div className="flex h-full flex-col">
+      <h2 className="text-[34px] font-semibold tracking-[-0.02em]">Case log</h2>
+      <ol className="mt-4 flex-1 divide-y divide-white/[0.08]">
+        {rows.map((l) => {
+          const sev = l.severity ?? (l.kind === "alert" ? "warning" : null);
+          return (
+            <li key={`${l.at}-${l.text}`} className="flex items-baseline gap-5 py-3">
+              <span className="tnum w-14 shrink-0 text-[15px] text-label-3">{l.time}</span>
+              <span className={cn("text-[20px]", sev === "critical" && "text-critical", sev === "warning" && "text-amber")}>{l.text}</span>
+            </li>
+          );
+        })}
+      </ol>
+      {c.status !== "none" && (
+        <p className={cn("tnum mt-4 text-[17px]", c.status === "mismatch" ? "text-critical" : "text-label-2")}>
+          Sponges {c.opened.sponge} opened{c.final ? ` · ${c.final.sponge} counted` : ""} · needles {c.opened.needle}
+          {c.status === "reconciled" ? " · reconciled" : ""}
         </p>
       )}
     </div>
+  );
+}
+
+function ReadyFocus() {
+  return (
+    <div className="flex h-full flex-col items-center justify-center text-center">
+      <h2 className="text-[44px] font-semibold tracking-[-0.03em]">Ready</h2>
+      <p className="mt-2 text-[20px] text-label-2">&ldquo;ARNIE, brief me&rdquo; · &ldquo;ARNIE, start the operation&rdquo;</p>
+    </div>
+  );
+}
+
+function FocusTile({ v }: { v: EngineView }) {
+  let key = "ready";
+  let body: React.ReactNode = <ReadyFocus />;
+  if (v.imaging?.visible) {
+    key = "ct";
+    body = <div className="mx-auto aspect-square h-full max-h-full max-w-full"><CtViewer imaging={v.imaging} /></div>;
+  } else if (v.consult && v.consult.state !== "ended") {
+    key = "consult"; body = <ConsultFocus v={v} />;
+  } else if (v.phase === "signin" || v.phase === "timeout" || v.phase === "signout") {
+    key = v.phase; body = <ChecklistFocus list={v.checklists[v.phase]} />;
+  } else if (v.summary) {
+    key = "summary"; body = <SummaryFocus v={v} />;
+  } else if (v.log.length) {
+    key = "log"; body = <TimelineFocus v={v} />;
+  }
+  return (
+    <Tile area="focus" label="Focus" className={cn(key === "ct" && "bg-black! p-3")}>
+      <div key={key} className="focus-in h-full min-h-0">{body}</div>
+    </Tile>
   );
 }
 
@@ -304,109 +286,53 @@ export function Board() {
   const d = now ? new Date(now) : null;
   const [audio, setAudio] = useState<AudioContext | null>(null);
   useEarcons(v, audio);
-  const vs = vegaState(v, now);
   useEffect(() => { void loadCt().catch(() => {}); }, []); // fetch the CT in the background so it shows instantly
 
   if (!v) {
-    return <main className="grid flex-1 place-items-center text-muted-foreground">Connecting to the Operon engine…</main>;
+    return <main className="grid flex-1 place-items-center text-[17px] text-label-2">Connecting to the Operon engine…</main>;
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-[1800px] flex-1 flex-col gap-4 p-4 sm:p-6">
-      <header className="flex flex-wrap items-center justify-between gap-4 border-b pb-4">
+    <main className="flex min-h-dvh w-full flex-1 flex-col gap-4 p-4 sm:p-6 lg:h-dvh lg:min-h-0 lg:flex-none lg:overflow-hidden">
+      <header className="flex items-center justify-between gap-4 px-2">
         <div className="flex min-w-0 items-center gap-4">
-          <Logo size={30} />
-          <span aria-hidden className="h-7 w-px bg-border" />
-          <h1 className="truncate text-lg">
-            <span className="font-semibold">{v.case.room}</span>
-            <span className="text-muted-foreground"> · {v.case.patient} · {v.case.procedure}</span>
-          </h1>
+          <Logo size={24} />
+          <span aria-hidden className="h-5 w-px bg-white/15 max-sm:hidden" />
+          <p className="truncate text-[17px] font-medium max-sm:hidden">{v.case.room}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-5">
-          <PhaseStepper v={v} />
-          <div className="flex items-center gap-2.5">
-            <ArnieRing state={v.paused ? "off" : vs} ticks={phaseTicks(v)} size={46} />
-            <span className={cn("w-20 font-mono text-xs font-semibold uppercase tracking-[0.08em]", v.paused || vs === "off" ? "text-muted-foreground" : vs === "warning" ? "text-amber" : vs === "critical" ? "text-critical" : "text-teal")}>
-              {v.paused ? "Paused" : vs === "off" ? "ARNIE off" : vs === "listening" ? "Listening" : vs === "speaking" ? "Speaking" : vs === "warning" ? "Warning" : "Critical"}
-            </span>
-          </div>
-          <span className="font-mono text-4xl font-semibold tabular-nums">{d ? `${pad2(d.getHours())}:${pad2(d.getMinutes())}` : "--:--"}</span>
-        </div>
-      </header>
-
-      <ChartStrip v={v} />
-
-      <AlertBanner v={v} now={now} />
-
-      <div className="grid flex-1 gap-4 lg:grid-cols-[2fr_1fr]">
-        <section aria-label="Current focus" className="min-h-[420px]">
-          <Hero v={v} />
-        </section>
-
-        <aside className="flex flex-col gap-5" aria-label="Conversation and case log">
-          <section aria-label="Live conversation" className="flex flex-col">
-            <h2 className="mb-2 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">Live conversation</h2>
-            <ol className="flex flex-col gap-2.5" aria-live="polite">
-              {v.transcript.slice(-6).map((t) => {
-                const sev = t.severity ?? "info";
-                return (
-                  <li
-                    key={`${t.at}-${t.text}`}
-                    className={cn("text-[15px] leading-snug", t.who === "heard" ? "text-surgeon" : cn("border-l-[3px] pl-2.5", severityBorder[sev], sev !== "info" && severityText[sev]))}
-                  >
-                    <span className={cn("block text-[10px] font-semibold uppercase tracking-[0.1em]", t.who === "heard" ? "text-muted-foreground" : severityText[sev])}>
-                      {t.who === "heard" ? "Heard" : `ARNIE${sev === "critical" ? " · critical" : sev === "warning" ? " · warning" : ""}`}
-                      {t.via === "llm" && " · parsed by LLM"}
-                    </span>
-                    {t.text}
-                  </li>
-                );
-              })}
-              {v.transcript.length === 0 && <li className="text-muted-foreground">Waiting for the room…</li>}
-            </ol>
-          </section>
-
-          <section aria-label="Case log">
-            <h2 className="mb-1 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">Case log</h2>
-            {v.log.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Nothing logged yet.</p>
-            ) : (
-              <ul className="divide-y">
-                {v.log.slice(-7).map((l) => {
-                  const sev = l.severity ?? (l.kind === "alert" ? "warning" : null);
-                  return (
-                    <li key={`${l.at}-${l.text}`} className="flex items-baseline gap-3 py-1.5 text-sm">
-                      <span className="font-mono text-xs text-muted-foreground">{l.time}</span>
-                      <span className={cn("flex-1", sev && sev !== "info" && severityText[sev])}>{l.text}</span>
-                      {sev && sev !== "info" ? (
-                        <span className={cn("text-[10px] font-bold uppercase", severityText[sev])}>{sev}</span>
-                      ) : (
-                        <CheckCircle2 className="size-3.5 text-teal" aria-label="logged" />
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </section>
-        </aside>
-      </div>
-
-      <footer className="flex items-center justify-between gap-4 font-mono text-xs text-muted-foreground">
-        <span>{v.agent.running ? "ARNIE listening" : "ARNIE stopped"}{v.llm ? " · LLM fallback on" : ""}</span>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={() => (audio ? (audio.close(), setAudio(null)) : setAudio(new AudioContext()))}
-            className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-foreground hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-pressed={!!audio}
+            aria-label={audio ? "Alert tones on" : "Alert tones off"}
+            title={audio ? "Alert tones on" : "Turn on alert tones"}
+            className="inline-flex h-9 items-center gap-2 rounded-full bg-tile px-3.5 text-[13px] text-label-2 transition-colors hover:text-foreground"
           >
-            {audio ? <Volume2 className="size-3.5" aria-hidden /> : <VolumeX className="size-3.5" aria-hidden />}
-            Alert tones {audio ? "on" : "off"}
+            {audio ? <Volume2 className="size-4" aria-hidden /> : <VolumeX className="size-4" aria-hidden />}
+            <span className="hidden sm:inline">{audio ? "Tones on" : "Tones off"}</span>
           </button>
-          <span>{connected ? "live" : "reconnecting…"}</span>
+          <span aria-label={connected ? "Connected" : "Reconnecting"} className={cn("size-2 rounded-full", connected ? "bg-teal" : "bg-amber")} />
+          <span className="tnum text-[34px] font-semibold tracking-[-0.02em]">{d ? `${pad2(d.getHours())}:${pad2(d.getMinutes())}` : "--:--"}</span>
         </div>
-      </footer>
+      </header>
+
+      <div
+        className={cn(
+          "grid min-h-0 flex-1 gap-4",
+          "[grid-template-areas:'patient'_'arnie'_'alerts'_'clock'_'focus'_'chart'] grid-cols-1",
+          "md:grid-cols-2 md:[grid-template-areas:'patient_patient'_'arnie_alerts'_'arnie_clock'_'focus_focus'_'chart_chart']",
+          "lg:grid-cols-[1fr_1fr_0.95fr_1.05fr] lg:grid-rows-[auto_minmax(0,1fr)_minmax(0,1fr)]",
+          "lg:[grid-template-areas:'patient_patient_clock_arnie'_'focus_focus_alerts_arnie'_'focus_focus_chart_arnie']",
+        )}
+      >
+        <PatientTile v={v} />
+        <ClockTile v={v} />
+        <ArnieTile v={v} now={now} />
+        <FocusTile v={v} />
+        <AlertTile v={v} now={now} />
+        <ChartTile v={v} />
+      </div>
     </main>
   );
 }

@@ -20,6 +20,32 @@ export function vegaState(v: EngineView | null, now: number | null): ArnieState 
   return v.agent.running ? "listening" : "off";
 }
 
+/** What the orb shows. Adds "thinking" (someone just spoke, no answer yet) and "paused" to ArnieState. */
+export type ArnieMood = "off" | "paused" | "listening" | "thinking" | "speaking" | "warning" | "critical";
+const THINK_MS = 4_000;
+
+export function arnieMood(v: EngineView | null, now: number | null): ArnieMood {
+  if (!v || !now) return "off";
+  if (v.paused) return "paused";
+  const s = vegaState(v, now);
+  if (s !== "listening") return s;
+  const lastHeard = [...v.transcript].reverse().find((t) => t.who === "heard");
+  const last = lastArnieLine(v);
+  if (lastHeard && now - lastHeard.at < THINK_MS && (!last || last.at < lastHeard.at)) return "thinking";
+  return "listening";
+}
+
+/** The orb animation and the word under it, per mood. */
+export const MOOD: Record<ArnieMood, { orb: "listening" | "working" | "composing" | "breathing" | "solving"; word: string; color?: string }> = {
+  off: { orb: "breathing", word: "Off" },
+  paused: { orb: "breathing", word: "Paused" },
+  listening: { orb: "listening", word: "Listening" },
+  thinking: { orb: "working", word: "Thinking" },
+  speaking: { orb: "composing", word: "Speaking" },
+  warning: { orb: "solving", word: "Warning", color: "#ffd60a" },
+  critical: { orb: "solving", word: "Alert", color: "#ff453a" },
+};
+
 /** How many of the four phase ticks are complete: Sign in, Time out, Surgery, Sign out. */
 export function phaseTicks(v: EngineView | null): number {
   if (!v) return 0;
