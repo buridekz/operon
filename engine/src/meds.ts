@@ -130,6 +130,7 @@ const NOT_DRUG = new Set([
   "scalpel", "forceps", "retractor", "suction", "cautery", "irrigation", "instrument", "instruments", "sponge", "sponges", "needle", "needles", "suture",
   "sutures", "clamp", "scissors", "towel", "drapes", "light", "minute", "moment", "second", "seconds", "advice", "everything", "something", "anything",
   "gloves", "table", "position", "anesthesia", "oxygen", "water", "saline", "the", "tourniquet", "microscope", "camera", "monitor", "hands",
+  "operation", "surgery", "procedure", "incision", "closure", "closing", "count", "counts", "consult", "timeout",
 ]);
 
 export type MedMention = { drug: string; dose: Dose | null; negated: boolean };
