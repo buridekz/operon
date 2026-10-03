@@ -7,9 +7,13 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-plex-sans);
-  --font-mono: var(--font-plex-mono);
-  --font-heading: var(--font-plex-condensed);
+  --font-sans: var(--font-geist);
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-geist);
+  --color-tile: var(--tile);
+  --color-tile-raised: var(--tile-raised);
+  --color-label-2: var(--label-2);
+  --color-label-3: var(--label-3);
   --color-teal: var(--teal);
   --color-teal-soft: var(--teal-soft);
   --color-amber: var(--amber);
@@ -91,47 +95,52 @@
 }
 
 .dark {
-  /* Operon "patient monitor" palette: pitch black, monitor colors carry meaning.
-     green = ARNIE / confirmed (heart-rate trace), cyan = team speech & chrome (monitor bar),
-     yellow = warning, red = critical (IEC 60601-1-8 alarm colors). */
+  /* Apple night: true black ground, graphite tiles, white and three greys for every word.
+     Color is reserved for meaning: system red = critical, system yellow = warning
+     (IEC 60601-1-8), system green only for "listening / confirmed". */
   --background: #000000;
-  --foreground: #f4f4f4;
-  --card: #0a0a0a;
-  --card-foreground: #f4f4f4;
-  --popover: #0a0a0a;
-  --popover-foreground: #f4f4f4;
-  --primary: #34e27c;
+  --foreground: #f5f5f7;
+  --tile: #1c1c1e;
+  --tile-raised: #2c2c2e;
+  --label-2: #a1a1a6;   /* secondary text: 7.6:1 on the tile */
+  --label-3: #6e6e73;   /* tertiary: captions only */
+  --card: #1c1c1e;
+  --card-foreground: #f5f5f7;
+  --popover: #2c2c2e;
+  --popover-foreground: #f5f5f7;
+  --primary: #f5f5f7;
   --primary-foreground: #000000;
-  --secondary: #151515;
-  --secondary-foreground: #f4f4f4;
-  --muted: #151515;
-  --muted-foreground: #9a9a9a;
-  --accent: #151515;
-  --accent-foreground: #f4f4f4;
-  --destructive: #ff4040;
-  --border: #262626;
-  --input: #2e2e2e;
-  --ring: #34e27c;
-  --teal: #34e27c;
-  --teal-soft: rgba(52, 226, 124, 0.12);
-  --amber: #f4e04d;
-  --amber-soft: rgba(244, 224, 77, 0.13);
-  --surgeon: #3cd6e0;
-  --critical: #ff4040;
-  --critical-soft: rgba(255, 64, 64, 0.14);
-  --chart-1: #34e27c;
-  --chart-2: #f4e04d;
-  --chart-3: #3cd6e0;
-  --chart-4: #ff4040;
-  --chart-5: #9a9a9a;
-  --sidebar: #0a0a0a;
-  --sidebar-foreground: #f4f4f4;
-  --sidebar-primary: #34e27c;
+  --secondary: #2c2c2e;
+  --secondary-foreground: #f5f5f7;
+  --muted: #2c2c2e;
+  --muted-foreground: #a1a1a6;
+  --accent: #3a3a3c;
+  --accent-foreground: #f5f5f7;
+  --destructive: #ff453a;
+  --border: rgba(255, 255, 255, 0.09);
+  --input: rgba(255, 255, 255, 0.14);
+  --ring: rgba(255, 255, 255, 0.55);
+  --teal: #30d158;
+  --teal-soft: rgba(48, 209, 88, 0.14);
+  --amber: #ffd60a;
+  --amber-soft: rgba(255, 214, 10, 0.14);
+  --surgeon: #64d2ff;
+  --critical: #ff453a;
+  --critical-soft: rgba(255, 69, 58, 0.16);
+  --radius: 0.875rem;
+  --chart-1: #30d158;
+  --chart-2: #ffd60a;
+  --chart-3: #64d2ff;
+  --chart-4: #ff453a;
+  --chart-5: #a1a1a6;
+  --sidebar: #1c1c1e;
+  --sidebar-foreground: #f5f5f7;
+  --sidebar-primary: #f5f5f7;
   --sidebar-primary-foreground: #000000;
-  --sidebar-accent: #151515;
-  --sidebar-accent-foreground: #f4f4f4;
-  --sidebar-border: #262626;
-  --sidebar-ring: #34e27c;
+  --sidebar-accent: #2c2c2e;
+  --sidebar-accent-foreground: #f5f5f7;
+  --sidebar-border: rgba(255, 255, 255, 0.09);
+  --sidebar-ring: rgba(255, 255, 255, 0.55);
 }
 
 @layer base {
@@ -143,7 +152,33 @@
   }
   html {
     @apply font-sans;
+    font-feature-settings: "ss01", "cv11";
+    color-scheme: dark;
   }
+  ::selection { background: rgba(255, 255, 255, 0.22); color: #ffffff; }
+  * { scrollbar-width: thin; scrollbar-color: #3a3a3c transparent; }
+  :focus-visible { outline: 2px solid rgba(255, 255, 255, 0.7); outline-offset: 3px; }
+}
+
+/* ---------- Tiles: the board's bento and the room's grouped lists ---------- */
+.tile {
+  background: var(--tile);
+  border-radius: 28px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+.tnum { font-variant-numeric: tabular-nums; }
+/* An alert takes over its tile: the fill rises from the bottom, once. */
+@keyframes tile-alert-in {
+  from { clip-path: inset(100% 0 0 0 round 28px); }
+  to { clip-path: inset(0 0 0 0 round 28px); }
+}
+@keyframes focus-in {
+  from { opacity: 0; filter: blur(6px); transform: scale(0.985); }
+  to { opacity: 1; filter: blur(0); transform: none; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .tile-alert-in { animation: tile-alert-in 520ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .focus-in { animation: focus-in 420ms cubic-bezier(0.16, 1, 0.3, 1) both; }
 }
 /* ---------- ARNIE ring + alarm motion (disabled for reduced-motion users) ---------- */
 @keyframes vega-breathe {

@@ -1,19 +1,17 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import type * as React from "react";
 import Link from "next/link";
-import { Check, ExternalLink, Mic, MicOff, Square } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Logo, ArnieRing } from "@/components/vega-ring";
+import { Check, ChevronRight, Keyboard, Mic, MicOff, MonitorUp, Square, X } from "lucide-react";
+import { ArnieOrb } from "@/components/arnie-orb";
+import { Logo } from "@/components/vega-ring";
 import { cn } from "@/lib/utils";
 import { engine, type CaseSetup } from "@/lib/engine";
 import { useEarcons } from "@/lib/earcons";
 import { joinChannel, type Call } from "@/lib/rtc";
 import { useEngineState } from "@/lib/use-engine";
-import { VEGA_LABEL, lastArnieLine, phaseTicks, vegaState } from "@/lib/vega";
+import { MOOD, arnieMood, lastArnieLine } from "@/lib/vega";
 
 type Step = "case" | "mic" | "live";
 const STEPS: { key: Step; label: string }[] = [
@@ -74,28 +72,36 @@ function useNow() {
   return now;
 }
 
-function Stepper({ step }: { step: Step }) {
-  const current = STEPS.findIndex((s) => s.key === step);
+function StepCount({ step }: { step: Step }) {
+  const i = STEPS.findIndex((s) => s.key === step);
+  return <p className="text-[13px] text-label-3" aria-label="Setup progress">Step {i + 1} of {STEPS.length} · {STEPS[i].label}</p>;
+}
+
+/** A capsule in the floating control bar. */
+function Capsule({ className, ...props }: React.ComponentProps<"button">) {
   return (
-    <ol className="flex items-center gap-2" aria-label="Setup progress">
-      {STEPS.map((s, i) => (
-        <li key={s.key} className="flex items-center gap-2">
-          <span
-            aria-current={i === current ? "step" : undefined}
-            className={cn(
-              "flex items-center gap-2 rounded-full px-3 py-1 text-sm",
-              i === current ? "bg-teal text-background font-semibold" : i < current ? "bg-teal-soft text-teal" : "text-muted-foreground",
-            )}
-          >
-            <span className="grid size-5 place-items-center rounded-full border border-current text-xs">{i < current ? <Check className="size-3" /> : i + 1}</span>
-            {s.label}
-          </span>
-          {i < STEPS.length - 1 && <span aria-hidden className="h-px w-6 bg-border" />}
-        </li>
-      ))}
-    </ol>
+    <button
+      type="button"
+      className={cn(
+        "inline-flex h-11 items-center gap-2 rounded-full px-4 text-[15px] font-medium text-foreground transition-colors hover:bg-white/[0.08] disabled:opacity-40",
+        className,
+      )}
+      {...props}
+    />
   );
 }
+
+function ControlBar({ children }: { children: React.ReactNode }) {
+  return (
+    <nav aria-label="Controls" className="pointer-events-none fixed inset-x-0 bottom-6 z-20 flex justify-center px-4">
+      <div className="pointer-events-auto flex max-w-full items-center gap-1 overflow-x-auto rounded-full bg-tile p-1.5 shadow-[0_12px_32px_rgba(0,0,0,0.7)] ring-1 ring-white/[0.08]">
+        {children}
+      </div>
+    </nav>
+  );
+}
+
+const primaryCapsule = "bg-foreground px-6 text-black hover:bg-white";
 
 export function RoomConsole() {
   const { view } = useEngineState();
@@ -110,9 +116,10 @@ export function RoomConsole() {
   const [level, setLevel] = useState(0);
   const [audio, setAudio] = useState<AudioContext | null>(null);
   const [rehearsal, setRehearsal] = useState("");
+  const [typing, setTyping] = useState(false);
   useEarcons(view, audio);
 
-  // Mic level meter.
+  // Mic level, which also drives the orb during the mic check.
   useEffect(() => {
     const id = setInterval(() => {
       const l = callRef.current?.mic.getVolumeLevel() ?? 0;
@@ -201,6 +208,7 @@ export function RoomConsole() {
     setMicOn(false);
     setHeardSomething(false);
     setLevel(0);
+    setTyping(false);
     setStep("case");
     setBusy(false);
   }
@@ -223,138 +231,167 @@ export function RoomConsole() {
     await engine("/api/simulate", { text });
   }
 
-  const vs = vegaState(view, now);
-  const lastHeard = view ? [...view.transcript].reverse().find((t) => t.who === "heard") : undefined;
+  const mood = micMuted ? "paused" : arnieMood(view, now);
+  const m = MOOD[mood];
   const lastArnie = view ? lastArnieLine(view) : undefined;
-  const pct = Math.round(level * 100);
+  const sev = lastArnie?.severity ?? "info";
+  const line = paused
+    ? "Press M, or say “ARNIE, resume”, when you need me."
+    : lastArnie?.text ?? "Say “ARNIE, brief me” to begin.";
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 py-8 sm:px-6">
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <Logo size={30} />
-        <Stepper step={step} />
+    <main className="relative flex min-h-dvh flex-1 flex-col">
+      <header className="flex items-center justify-between gap-4 px-5 pt-5 sm:px-8 sm:pt-7">
+        <Logo size={24} />
+        {step === "live" ? (
+          <p className="flex items-center gap-2 text-[15px] text-label-2">
+            <span aria-hidden className={cn("size-2 rounded-full", view?.agent.running && !paused ? "bg-teal" : "bg-label-3")} />
+            {view?.case.room} · {view?.case.patient}
+          </p>
+        ) : (
+          <StepCount step={step} />
+        )}
       </header>
 
       {error && (
-        <p role="alert" className="mt-6 rounded-lg border border-critical bg-critical-soft px-4 py-3 text-critical">{error}</p>
+        <p role="alert" className="mx-auto mt-6 max-w-xl rounded-2xl bg-critical-soft px-5 py-3 text-[15px] text-critical">{error}</p>
       )}
 
       {step === "case" && (
-        <form onSubmit={saveCase} className="mt-8 space-y-6">
-          <div>
-            <h1 className="font-heading text-3xl font-semibold">Set up the case</h1>
-            <p className="mt-1 text-muted-foreground">Do this before anyone scrubs. It&apos;s the only typing in the whole case.</p>
-          </div>
+        <form id="case" onSubmit={saveCase} className="mx-auto w-full max-w-2xl px-4 pb-32 pt-10 sm:px-6">
+          <h1 className="text-[34px] font-semibold leading-tight tracking-[-0.02em]">New case</h1>
+          <p className="mt-1 text-[17px] text-label-2">Set this up before anyone scrubs. It&apos;s the only typing in the whole case.</p>
           {GROUPS.map((g) => (
-            <Card key={g.title}>
-              <CardHeader>
-                <CardTitle className="text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">{g.title}</CardTitle>
-              </CardHeader>
-              <CardContent className="grid gap-4 sm:grid-cols-2">
+            <fieldset key={g.title} className="mt-8">
+              <legend className="mb-2 px-4 text-[13px] text-label-2">{g.title}</legend>
+              <div className="tile divide-y divide-white/[0.08] overflow-hidden !rounded-[22px]">
                 {g.fields.map((f) => (
-                  <div key={f.name} className={cn("grid gap-1.5", (f.wide || f.hint) && "sm:col-span-2")}>
-                    <Label htmlFor={f.name}>{f.label}</Label>
-                    <Input id={f.name} name={f.name} defaultValue={f.value} aria-describedby={f.hint ? `${f.name}-hint` : undefined} />
-                    {f.hint && <p id={`${f.name}-hint`} className="text-xs text-muted-foreground">{f.hint}</p>}
+                  <div key={f.name} className="grid gap-1 px-4 py-3 transition-colors focus-within:bg-white/[0.03] sm:grid-cols-[180px_1fr] sm:items-center sm:gap-4">
+                    <label htmlFor={f.name} className="text-[15px] text-label-2">{f.label}</label>
+                    <input
+                      id={f.name}
+                      name={f.name}
+                      defaultValue={f.value}
+                      aria-describedby={f.hint ? `${f.name}-hint` : undefined}
+                      className="w-full min-w-0 bg-transparent text-[17px] text-foreground caret-white outline-none placeholder:text-label-3"
+                    />
                   </div>
                 ))}
-              </CardContent>
-            </Card>
+              </div>
+              {g.fields.filter((f) => f.hint).map((f) => (
+                <p key={f.name} id={`${f.name}-hint`} className="mt-2 px-4 text-[13px] leading-snug text-label-3">{f.hint}</p>
+              ))}
+            </fieldset>
           ))}
-          <div className="flex justify-end">
-            <Button type="submit" size="lg" disabled={busy}>Continue to mic check</Button>
-          </div>
+          <ControlBar>
+            <Capsule type="submit" form="case" disabled={busy} className={primaryCapsule}>
+              Continue <ChevronRight className="size-4" aria-hidden />
+            </Capsule>
+          </ControlBar>
         </form>
       )}
 
       {step === "mic" && (
-        <section className="mt-8 space-y-6" aria-labelledby="mic-title">
-          <div>
-            <h1 id="mic-title" className="font-heading text-3xl font-semibold">Check the room microphone</h1>
-            <p className="mt-1 text-muted-foreground">Place this device where the whole team can be heard, then say a few words.</p>
-          </div>
-          <Card>
-            <CardContent className="space-y-5 py-2">
-              {!micOn ? (
-                <Button size="lg" onClick={turnOnMic} disabled={busy}>
-                  <Mic className="size-4" aria-hidden /> Turn on microphone
-                </Button>
-              ) : (
-                <>
-                  <div className="h-4 overflow-hidden rounded-full bg-secondary" role="meter" aria-label="Microphone level" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
-                    <div className="h-full rounded-full bg-teal transition-[width] duration-100" style={{ width: `${pct}%` }} />
-                  </div>
-                  <p className={cn("flex items-center gap-2", heardSomething ? "text-teal" : "text-muted-foreground")} aria-live="polite">
-                    {heardSomething ? <><Check className="size-4" aria-hidden /> Microphone is working.</> : "Say a few words. The bar should move."}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    {denoise
-                      ? "AI noise suppression is on: background noise and nearby voices are filtered."
-                      : "AI noise suppression isn't available in this browser. Use desktop Chrome or Edge for a noisy room."}
-                  </p>
-                </>
-              )}
-            </CardContent>
-          </Card>
-          <div className="flex justify-between gap-3">
-            <Button variant="secondary" size="lg" onClick={back} disabled={busy}>Back</Button>
-            <Button size="lg" onClick={startArnie} disabled={busy || !micOn}>Start ARNIE</Button>
-          </div>
+        <section className="flex flex-1 flex-col items-center justify-center px-4 pb-32 text-center" aria-labelledby="mic-title">
+          <ArnieOrb
+            state="listening"
+            size={220}
+            speed={micOn ? 0.35 + level * 5 : 0.3}
+            paused={!micOn}
+            label="Microphone check"
+            className={cn("transition-opacity duration-500", !micOn && "opacity-40")}
+          />
+          <h1 id="mic-title" className="mt-10 text-[34px] font-semibold leading-tight tracking-[-0.02em]">Check the microphone</h1>
+          <p className="mt-2 max-w-md text-[17px] text-label-2" aria-live="polite">
+            {!micOn ? "Place this device where the whole team can be heard."
+              : heardSomething ? <span className="inline-flex items-center gap-1.5"><Check className="size-4 text-teal" aria-hidden />ARNIE can hear the room.</span>
+                : "Say a few words. The orb moves with your voice."}
+          </p>
+          {micOn && (
+            <p className="mt-3 text-[13px] text-label-3">
+              {denoise ? "AI noise suppression is on." : "AI noise suppression isn't available in this browser. Use desktop Chrome or Edge for a noisy room."}
+            </p>
+          )}
+          <ControlBar>
+            <Capsule onClick={back} disabled={busy}>Back</Capsule>
+            {!micOn ? (
+              <Capsule onClick={turnOnMic} disabled={busy} className={primaryCapsule}>
+                <Mic className="size-4" aria-hidden /> Turn on microphone
+              </Capsule>
+            ) : (
+              <Capsule onClick={startArnie} disabled={busy} className={primaryCapsule}>Start ARNIE</Capsule>
+            )}
+          </ControlBar>
         </section>
       )}
 
       {step === "live" && (
-        <section className="mt-6 flex flex-1 flex-col items-center gap-6 text-center" aria-labelledby="live-title">
-          <ArnieRing state={paused ? "off" : vs} ticks={phaseTicks(view)} size={190} className="mt-4" />
-          <div aria-live="polite">
-            <h1 id="live-title" className={cn("font-heading text-4xl font-semibold", !paused && vs === "warning" && "text-amber", !paused && vs === "critical" && "text-critical")}>
-              {paused ? "Paused, not listening" : VEGA_LABEL[vs].replace(/^ARNIE /, "").replace(/^is /, "").replace(/^raised an? /, "")}
-            </h1>
-            <p className="mt-2 text-lg text-muted-foreground">
-              {view?.phase === "idle" ? <>Say &ldquo;<span className="text-foreground">ARNIE, start time out</span>&rdquo;</> : `${view?.case.room} · ${view?.case.patient}`}
-            </p>
-          </div>
-
-          <Card className="w-full text-left">
-            <CardContent className="space-y-3 py-1">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">Heard</p>
-                <p className="text-lg text-surgeon">{lastHeard?.text ?? "…"}</p>
-              </div>
-              <div className={cn("border-l-[3px] pl-3", lastArnie?.severity === "critical" ? "border-critical" : lastArnie?.severity === "warning" ? "border-amber" : "border-teal")}>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-teal">ARNIE</p>
-                <p className={cn("text-lg", lastArnie?.severity === "critical" && "text-critical", lastArnie?.severity === "warning" && "text-amber")}>{lastArnie?.text ?? "…"}</p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <div className="flex flex-wrap justify-center gap-3">
-            <Button size="lg" variant={paused ? "default" : "secondary"} onClick={togglePause} aria-pressed={paused} aria-keyshortcuts="M">
-              {paused ? <Mic className="size-4" aria-hidden /> : <MicOff className="size-4" aria-hidden />}
-              {paused ? "Resume listening" : "Pause listening"}
-              <kbd className="ml-1 rounded border border-current/30 px-1.5 font-mono text-xs opacity-70">M</kbd>
-            </Button>
-            <Button variant="secondary" size="lg" nativeButton={false} render={<Link href="/board" target="_blank" />}>
-              Open wall board <ExternalLink className="size-4" aria-hidden />
-            </Button>
-            <Button variant="destructive" size="lg" onClick={stop} disabled={busy}>
-              <Square className="size-4" aria-hidden /> Stop ARNIE
-            </Button>
-          </div>
-
-          <details className="w-full text-left">
-            <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">Rehearse without a microphone</summary>
-            <form onSubmit={rehearse} className="mt-3 flex gap-2">
-              <Label htmlFor="rehearsal" className="sr-only">Type a sentence as if it was spoken</Label>
-              <Input id="rehearsal" value={rehearsal} onChange={(e) => setRehearsal(e.target.value)} placeholder="ARNIE, start time out" />
-              <Button type="submit" variant="secondary">Send</Button>
-            </form>
-            {paused && (
-              <p className="mt-2 text-sm text-amber" role="status">
-                ARNIE is paused and won&apos;t answer. Press Resume listening (M) or send &ldquo;ARNIE, resume&rdquo;.
-              </p>
+        <section className="flex flex-1 flex-col items-center justify-center px-4 pb-36 text-center" aria-labelledby="live-title">
+          <ArnieOrb
+            state={m.orb}
+            size={280}
+            color={m.color}
+            speed={mood === "paused" || mood === "off" ? 0.25 : 1}
+            label={`ARNIE: ${m.word}`}
+            className={cn("transition-opacity duration-700", (mood === "paused" || mood === "off") && "opacity-35")}
+          />
+          <h1
+            id="live-title"
+            aria-live="polite"
+            className={cn(
+              "mt-8 text-[44px] font-semibold leading-none tracking-[-0.03em] transition-colors",
+              mood === "critical" && "text-critical",
+              mood === "warning" && "text-amber",
+              (mood === "paused" || mood === "off") && "text-label-2",
             )}
-          </details>
+          >
+            {m.word}
+          </h1>
+          <p
+            className={cn(
+              "mt-5 line-clamp-3 min-h-[4.8em] max-w-xl text-xl leading-relaxed text-label-2",
+              !paused && sev === "critical" && "text-critical",
+              !paused && sev === "warning" && "text-amber",
+            )}
+          >
+            {line}
+          </p>
+
+          {typing && (
+            <form onSubmit={rehearse} className="fixed inset-x-0 bottom-24 z-20 mx-auto flex w-[min(36rem,calc(100%-2rem))] items-center gap-2 rounded-full bg-tile-raised p-1.5 pl-5 ring-1 ring-white/[0.08]">
+              <label htmlFor="rehearsal" className="sr-only">Type a sentence as if it was spoken</label>
+              <input
+                id="rehearsal"
+                autoFocus
+                value={rehearsal}
+                onChange={(e) => setRehearsal(e.target.value)}
+                placeholder="ARNIE, brief me"
+                className="min-w-0 flex-1 bg-transparent text-[17px] caret-white outline-none placeholder:text-label-3"
+              />
+              <Capsule type="submit" className={cn(primaryCapsule, "h-9 px-4")}>Send</Capsule>
+            </form>
+          )}
+
+          <ControlBar>
+            <Capsule onClick={togglePause} aria-pressed={paused} aria-keyshortcuts="M" className={cn(paused && primaryCapsule)}>
+              {paused ? <Mic className="size-4" aria-hidden /> : <MicOff className="size-4" aria-hidden />}
+              {paused ? "Resume" : "Pause"}
+              <kbd className="rounded-md bg-white/[0.08] px-1.5 font-sans text-[12px] text-label-2 max-sm:hidden">M</kbd>
+            </Capsule>
+            <Link
+              href="/board"
+              target="_blank"
+              className="inline-flex h-11 items-center gap-2 rounded-full px-4 text-[15px] font-medium transition-colors hover:bg-white/[0.08]"
+            >
+              <MonitorUp className="size-4" aria-hidden /> <span className="max-sm:sr-only">Board</span>
+            </Link>
+            <Capsule onClick={() => setTyping((t) => !t)} aria-pressed={typing}>
+              {typing ? <X className="size-4" aria-hidden /> : <Keyboard className="size-4" aria-hidden />} <span className="max-sm:sr-only">Type</span>
+            </Capsule>
+            <Capsule onClick={stop} disabled={busy} className="text-critical hover:bg-critical-soft">
+              <Square className="size-4" aria-hidden /> <span className="max-sm:sr-only">Stop ARNIE</span>
+            </Capsule>
+          </ControlBar>
         </section>
       )}
     </main>
