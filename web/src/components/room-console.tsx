@@ -218,6 +218,8 @@ export function RoomConsole() {
     const text = rehearsal.trim();
     if (!text) return;
     setRehearsal("");
+    // A typed "Vega, resume" also undoes the pause button (which mutes the mic here).
+    if (paused && /\b(resume|wake up|start listening|unmute|i'?m back)\b/i.test(text)) return void (await togglePause());
     await engine("/api/simulate", { text });
   }
 
@@ -347,6 +349,11 @@ export function RoomConsole() {
               <Input id="rehearsal" value={rehearsal} onChange={(e) => setRehearsal(e.target.value)} placeholder="Vega, start time out" />
               <Button type="submit" variant="secondary">Send</Button>
             </form>
+            {paused && (
+              <p className="mt-2 text-sm text-amber" role="status">
+                Vega is paused and won&apos;t answer. Press Resume listening (M) or send &ldquo;Vega, resume&rdquo;.
+              </p>
+            )}
           </details>
         </section>
       )}
