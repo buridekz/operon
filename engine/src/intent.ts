@@ -7,7 +7,7 @@ import { EMPTY_INTENT, SPECIALISTS, type Intent } from "./brain.js";
 export const SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["intent", "checklist", "side", "limb", "drug", "value", "specialty", "item", "quantity", "detail", "sponges", "needles", "milestone", "imaging"],
+  required: ["intent", "checklist", "side", "limb", "drug", "dose", "value", "specialty", "item", "quantity", "detail", "sponges", "needles", "milestone", "imaging"],
   properties: {
     intent: {
       type: "string",
@@ -18,6 +18,7 @@ export const SCHEMA = {
     side: { type: "string", enum: ["left", "right", "none"] },
     limb: { type: "string", enum: ["thigh", "arm", "leg", "forearm", "calf", "none"] },
     drug: { type: "string", description: "Drug name exactly as heard, or empty." },
+    dose: { type: "string", description: "Dose exactly as heard (e.g. '2 grams'), or empty." },
     value: { type: "string", enum: ["potassium", "hemoglobin", "none"] },
     specialty: { type: "string", enum: [...Object.keys(SPECIALISTS), "none"] },
     item: { type: "string", enum: ["sponge", "needle", "suture", "implant", "none"] },
@@ -35,7 +36,7 @@ The text comes from speech recognition and may contain recognition errors.
 Return the single best intent. Rules:
 - If the command is ambiguous, not one of the intents, or asks for medical advice, a diagnosis or a dose, return intent "unknown".
 - Never invent values. Use "none", "", 0 or -1 when a field was not said.
-- give_drug: copy the drug name as heard into "drug" (do not correct or substitute it).
+- give_drug: copy the drug name as heard into "drug" and any dose as heard into "dose" (do not correct or substitute either).
 - open_items: sponges/lap pads -> item "sponge"; loose needles -> "needle"; a suture like "4-0 Prolene" -> item "suture" with detail; an implant/graft/mesh/plate/screw -> item "implant" with detail.
 - final_count: the team states the final count of sponges and/or needles.
 - milestone: incision or closure being called.
