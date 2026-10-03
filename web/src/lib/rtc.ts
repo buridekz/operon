@@ -26,8 +26,16 @@ export async function joinChannel(
   if (onUserJoined) client.on("user-joined", (u) => onUserJoined(u.uid));
 
   await client.join(appId, channel, token, uid);
-  const mic = await AgoraRTC.createMicrophoneAudioTrack({ AEC: true, ANS: true, AGC: true });
-  await client.publish([mic]);
+  let mic: IMicrophoneAudioTrack | undefined;
+  try {
+    mic = await AgoraRTC.createMicrophoneAudioTrack({ AEC: true, ANS: true, AGC: true });
+    await client.publish([mic]);
+  } catch (e) {
+    // Mic blocked or missing: leave cleanly so the caller can show the error and try again.
+    mic?.close();
+    await client.leave().catch(() => {});
+    throw e;
+  }
 
   return {
     client,

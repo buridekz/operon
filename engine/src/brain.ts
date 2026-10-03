@@ -494,14 +494,12 @@ export function handle(state: State, text: string, now: number, opts: Opts): Tur
   const woke = WAKE.test(heard);
   const body = heard.replace(WAKE, "").replace(/^[\s,.:;-]+/, "").replace(/^(hey|ok|okay)[\s,]+/i, "");
 
-  // During a live consult, stay silent unless asked to end it.
+  // A consult in progress: "Vega, end consult" ends it. While the specialist is on the line, only
+  // speech addressed to Vega is handled, so the team's talk with them is never taken as an answer.
+  // While it is still ringing, Vega works as usual.
   if (state.consult && state.consult.state !== "ended") {
-    if (woke && /\bend\b.*\bconsult\b|\bhang up\b/i.test(body)) {
-      state.consult.state = "ended";
-      addLog(state, now, `Consult ended: ${state.consult.specialty}`, "consult");
-      return "Consult ended.";
-    }
-    return null;
+    if (woke && END_CONSULT.test(body)) return endConsult(state, now, "room");
+    if (state.consult.state === "live" && !woke) return null;
   }
 
   if (state.pending) {
@@ -524,9 +522,10 @@ export function handle(state: State, text: string, now: number, opts: Opts): Tur
   return intent ? applyIntent(state, intent, now, opts) : { parse: body };
 }
 
-/** Specialist joined the channel: the briefing Vega speaks to them. */
+/** Specialist joined the channel: the briefing Vega speaks to them. Only a ringing call can be
+ *  answered, so a late join can't reopen a consult the room already ended. */
 export function consultJoined(state: State, now: number, opts: Opts): string | null {
-  if (!state.consult) return null;
+  if (state.consult?.state !== "ringing") return null;
   state.consult.state = "live";
   addLog(state, now, `Consult live: ${state.consult.doctor}`, "consult");
   const c = state.case;
@@ -534,6 +533,20 @@ export function consultJoined(state: State, now: number, opts: Opts): string | n
   if (state.tourniquet) parts.push(`Tourniquet ${minutesSince(state.tourniquet.start, now, opts.minuteMs)} minutes.`);
   if (c.allergies.length) parts.push(`${c.allergies.map(cap).join(" and ")} allergy.`);
   return parts.join(" ");
+}
+
+const END_CONSULT = /\bend\b.*\b(consult|call)\b|\bhang up\b|\bcancel\b.*\bcall\b/i;
+
+/** End the consult, from the room ("Vega, end consult") or the specialist's phone (hang up or
+ *  decline). Returns what Vega says, or null if there was nothing to end. */
+export function endConsult(state: State, now: number, by: "room" | "specialist"): string | null {
+  const c = state.consult;
+  if (!c || c.state === "ended") return null;
+  const declined = by === "specialist" && c.state === "ringing";
+  c.state = "ended";
+  addLog(state, now, `Consult ${declined ? "declined" : "ended"}: ${c.specialty}`, "consult");
+  if (by === "room") return "Consult ended.";
+  return declined ? `${c.doctor} declined the call.` : `${c.doctor} left the call.`;
 }
 
 /** Called every second: an alert to speak, or null. */

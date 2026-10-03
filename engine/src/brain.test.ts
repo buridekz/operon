@@ -1,5 +1,5 @@
 import { describe, test, expect } from "vitest";
-import { createState, handle, tick, consultJoined, view, applyIntent, EMPTY_INTENT, SAY_AGAIN, type State, type Intent } from "./brain.js";
+import { createState, handle, tick, consultJoined, endConsult, view, applyIntent, EMPTY_INTENT, SAY_AGAIN, type State, type Intent } from "./brain.js";
 import { matchDrug } from "./formulary.js";
 
 const T0 = new Date("2026-10-04T14:20:00+08:00").getTime();
@@ -177,7 +177,7 @@ describe("lookups, timers and consults", () => {
     expect(tick(s, T0 + 61 * MIN, o)).toBeNull();
   });
 
-  test("call vascular: rings, briefs from the log, stays silent until ended", () => {
+  test("call vascular: rings, briefs from the log, only answers Vega while live", () => {
     const s = createState({ summary: "58-year-old male, left femoral bleed", allergies: ["penicillin"] });
     handle(s, "Vega, tourniquet on, left thigh", T0, opts);
     handle(s, "Confirmed", T0, opts);
@@ -185,8 +185,24 @@ describe("lookups, timers and consults", () => {
     expect(s.consult!.state).toBe("ringing");
     expect(consultJoined(s, T0 + 22 * MIN, opts)).toBe("Dr. Valdez, this is OR 3. 58-year-old male, left femoral bleed. Tourniquet 22 minutes. Penicillin allergy.");
     expect(handle(s, "What do you see on the angiogram?", T0 + 23 * MIN, opts)).toBeNull();
-    expect(handle(s, "Vega, give ampicillin", T0 + 23 * MIN, opts)).toBeNull();
+    expect(handle(s, "Vega, tourniquet off", T0 + 23 * MIN, opts)).toMatch(/^Tourniquet off, left thigh, .*Confirm\?$/);
+    expect(handle(s, "Confirmed", T0 + 23 * MIN, opts)).toBeNull(); // said to the specialist, not to Vega
+    expect(handle(s, "Vega, confirmed", T0 + 23 * MIN, opts)).toBe("Logged.");
+    expect(handle(s, "Vega, give ampicillin", T0 + 24 * MIN, opts)).toMatch(/^Caution: penicillin allergy/);
     expect(handle(s, "Vega, end consult", T0 + 25 * MIN, opts)).toBe("Consult ended.");
+    expect(consultJoined(s, T0 + 26 * MIN, opts)).toBeNull(); // a late join can't reopen it
+    expect(s.consult!.state).toBe("ended");
+  });
+
+  test("a ringing call doesn't mute Vega, and the phone can decline or hang up", () => {
+    const s = createState();
+    handle(s, "Vega, call vascular", T0, opts);
+    expect(handle(s, "Vega, show the CT", T0, opts)).toBe("Showing the pre-op CT.");
+    expect(endConsult(s, T0, "specialist")).toBe("Dr. Valdez declined the call.");
+    expect(endConsult(s, T0, "specialist")).toBeNull();
+    handle(s, "Vega, call vascular", T0 + MIN, opts);
+    consultJoined(s, T0 + MIN, opts);
+    expect(endConsult(s, T0 + 2 * MIN, "specialist")).toBe("Dr. Valdez left the call.");
   });
 });
 
