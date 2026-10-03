@@ -79,7 +79,7 @@ export type Intent = {
   intent:
     | "start_checklist" | "tourniquet_on" | "tourniquet_off" | "give_drug" | "antibiotic_time"
     | "preop_value" | "call_specialist" | "tourniquet_time"
-    | "open_items" | "final_count" | "milestone" | "imaging" | "lookup" | "unknown";
+    | "open_items" | "final_count" | "milestone" | "imaging" | "lookup" | "conversation" | "unknown";
   checklist: ChecklistName | "none";
   side: "left" | "right" | "none";
   limb: "thigh" | "arm" | "leg" | "forearm" | "calf" | "none";
@@ -154,7 +154,7 @@ export type State = {
 export type Opts = { minuteMs: number; alertMinutes?: number[] };
 /** handle() result: words to speak, null for silence, a request to parse a command with the LLM,
  *  or room speech naming a drug we don't list, to be screened against the recorded allergies. */
-export type Turn = string | null | { parse: string } | { screen: string };
+export type Turn = string | null | { parse: string } | { screen: string } | { chat: string };
 
 // Wake word: "Vega", Operon's voice agent. Chosen after a live Agora test: ARES transcribed
 // "Vega" exactly every time (unlike "Vega" -> "Sir John", one sound from "surgeon", or
@@ -166,6 +166,7 @@ const NO = /\b(cancel|no,? wait|wrong|correction|negative|scratch that)\b/i;
 const QUESTION = /^(what|whats|what's|which|how many|how much|when|who|tell me|remind me|read( me)? back|any|is there|are there|do we have|list|check)\b|\?$/i;
 const PAUSE = /\b(pause|stop|mute)\s+(listening|yourself|the mic)\b|\bgo (to )?sleep\b|\bstand ?by\b|^mute\b|^pause$/i;
 const RESUME = /\b(resume|wake up|start listening|unmute|i'?m back|back on|listen up)\b|^listen\b/i;
+const ABOUT_VEGA = /\b(your name|who are you|what are you|who made you|who built you|what can you do|how can you help|what do you do|introduce yourself|tell (?:me|us) about yourself|how are you|are you (?:there|listening|ready|awake)|thank(?:s| you)|good (?:morning|afternoon|evening|job)|hello|hi there)\b/i;
 const SKIP = /\b(skip|let'?s (just )?start|move on|later|no time|we'?re late|go ahead without)\b/i;
 export const SAY_AGAIN = "Sorry, say that again.";
 
@@ -366,6 +367,9 @@ export function ruleIntent(body: string): Intent | null {
   m = body.match(/\bimplant(?:ing|ed)?\s+(?:(?:a|an|the|one)\s+)?(.+)$/i);
   if (m) return I({ intent: "open_items", item: "implant", quantity: 1, detail: m[1].replace(/[.,!?]+$/, "").trim() });
 
+  // Talking to Vega about Vega, or small talk: answered in its own words, never a lookup.
+  if (ABOUT_VEGA.test(t)) return I({ intent: "conversation" });
+
   // Questions about the case record: read back, never logged. (Antibiotic time, pre-op labs and the
   // tourniquet clock have their own answers below.)
   if (QUESTION.test(t) && !/\b(antibiotic|potassium|hemoglobin|haemoglobin|tourniquet)\b/.test(t)) {
@@ -375,15 +379,25 @@ export function ruleIntent(body: string): Intent | null {
     if (/\b(sponges?|needles?|counts?)\b/.test(t) && !/\bfinal count\b/.test(t)) return I({ intent: "lookup", topic: "counts" });
     if (/\b(incision|closure|closing)\b/.test(t)) return I({ intent: "lookup", topic: "milestones" });
     if (/\b(procedure|operation|surgery|site|side)\b/.test(t)) return I({ intent: "lookup", topic: "procedure" });
-    if (/\b(patient|who)\b/.test(t)) return I({ intent: "lookup", topic: "patient" });
+    // Only "who is it" questions; anything else about the patient ("is the patient diabetic?") is a conversation.
+    if (/\bwho(?:'s| is)\s+(?:the\s+)?(?:patient|on the table|this)\b|\bpatient'?s name\b|\bname of the patient\b|\b(?:which|what) patient\b|\babout the patient\b/.test(t)) {
+      return I({ intent: "lookup", topic: "patient" });
+    }
   }
 
   // Milestones
   if (/\b(skin\s+)?incision\b/.test(t)) return I({ intent: "milestone", milestone: "incision" });
   if (/\bclos(ure|ing)\b/.test(t)) return I({ intent: "milestone", milestone: "closure" });
 
+  // "Should we give more heparin?" asks for a decision, not an order: answered by conversation (which hands it back to the team).
+  if (/^(?:should|shall|do we|can we|could we|would|is it (?:ok|okay|safe)|how much should|what (?:dose|should))\b/.test(t) && /\b(?:give|push|start|use|dose)\b/.test(t)) {
+    return I({ intent: "conversation" });
+  }
   m = t.match(/\b(?:give|giving|gave|administer(?:ing)?|push(?:ing)?|inject(?:ing)?)\s+(.+)$/);
-  if (m) return I({ intent: "give_drug", drug: m[1].replace(/[.,!?]+$/, "").trim() });
+  if (m) {
+    const drug = m[1].replace(/[.,!?]+$/, "").replace(/^(?:(?:the|some|a|an|him|her|them|it|patient|more|extra|another)\s+)+/, "").replace(/(?:\s+(?:for me|please|now))+$/, "").trim();
+    return I({ intent: "give_drug", drug });
+  }
 
   if (/antibiotic/.test(t) && /(when|time|given)/.test(t)) return I({ intent: "antibiotic_time" });
   m = t.match(/\b(potassium|hemoglobin|haemoglobin)\b/);
@@ -684,7 +698,26 @@ export function handle(state: State, text: string, now: number, opts: Opts): Tur
   if (!body) return "Listening.";
   const cmd = normalizeHeard(body); // speech-recognition sound-alikes ("city" -> CT, "got to the name" -> go to the knee)
   const intent = ruleIntent(cmd);
+  if (intent?.intent === "conversation") return { chat: cmd };
   return intent ? applyIntent(state, intent, now, opts) : { parse: cmd };
+}
+
+/** The case record as plain text, for the conversation model. Read-only facts; nothing inferred. */
+export function chatContext(state: State, now: number, opts: Opts): string {
+  const c = state.case;
+  const lines = [
+    `Room: ${c.room}. Patient: ${c.patient}. Summary: ${c.summary}. Procedure: ${c.procedure}. Site: ${c.site}.`,
+    `Allergies: ${c.allergies.length ? c.allergies.join(", ") : "none recorded"}.`,
+    `Ordered medications: ${c.orders.length ? c.orders.map(withDose).join(", ") : "none recorded"}.`,
+    `Pre-op labs: ${Object.entries(c.preop).filter(([, v]) => v).map(([k, v]) => `${k} ${v}`).join(", ") || "none recorded"}.`,
+    `On-call specialists: ${c.specialists.map((s) => `${s.specialty}: ${s.doctor}`).join("; ")}.`,
+    `Phase: ${state.phase}. Checklists done: ${Object.keys(state.completed).join(", ") || "none"}.`,
+    state.tourniquet ? `Tourniquet on ${state.tourniquet.side}, ${minutesSince(state.tourniquet.start, now, opts.minuteMs)} minutes.` : "No tourniquet on.",
+    `Sponges on field: ${state.counts.sponge}, needles: ${state.counts.needle}.`,
+    state.consult && state.consult.state !== "ended" ? `Consult with ${state.consult.doctor} (${state.consult.specialty}) is ${state.consult.state}.` : "",
+    `Confirmed log (latest last): ${state.log.slice(-12).map((l) => `${l.time} ${l.text}`).join("; ") || "nothing yet"}.`,
+  ];
+  return lines.filter(Boolean).join("\n");
 }
 
 /** Specialist joined the channel: the briefing Vega speaks to them. Only a ringing call can be

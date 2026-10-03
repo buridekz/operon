@@ -12,7 +12,7 @@ export const SCHEMA = {
     intent: {
       type: "string",
       enum: ["start_checklist", "tourniquet_on", "tourniquet_off", "give_drug", "antibiotic_time", "preop_value", "call_specialist",
-        "tourniquet_time", "open_items", "final_count", "milestone", "imaging", "lookup", "unknown"],
+        "tourniquet_time", "open_items", "final_count", "milestone", "imaging", "lookup", "conversation", "unknown"],
     },
     checklist: { type: "string", enum: ["signin", "timeout", "signout", "none"] },
     side: { type: "string", enum: ["left", "right", "none"] },
@@ -42,7 +42,11 @@ The text comes from speech recognition and often contains sound-alike errors. Re
 "city" or "see tea" = CT; "got to the name" = go to the knee; "colonel" = coronal; "phone window" = bone window;
 "the cough" = the calf; "uncle" = ankle; drug names may be split or misspelled. Prefer the operating-room meaning.
 Return the single best intent. Rules:
-- If the command is ambiguous, not one of the intents, or asks for medical advice, a diagnosis or a dose, return intent "unknown".
+- conversation: talking TO the assistant rather than giving a command: questions about the assistant itself ("what's your name",
+  "what can you do"), small talk, thanks, a general question, or a question about the case that no other intent covers. Requests for
+  medical advice, a diagnosis or a dose are also "conversation" (the answer will decline). Note "their name"/"your name" said to the
+  assistant is about the assistant, not the patient.
+- If the text is garbled or truly unclear, return intent "unknown".
 - Never invent values. Use "none", "", 0 or -1 when a field was not said.
 - give_drug: copy the drug name as heard into "drug" and any dose as heard into "dose" (do not correct or substitute either).
 - open_items: sponges/lap pads -> item "sponge"; loose needles -> "needle"; a suture like "4-0 Prolene" -> item "suture" with detail; an implant/graft/mesh/plate/screw -> item "implant" with detail.
