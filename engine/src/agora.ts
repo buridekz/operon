@@ -46,8 +46,8 @@ export function startAgent(cfg: AgoraConfig) {
       idle_timeout: 120,
       advanced_features: { enable_rtm: true, enable_sal: cfg.speakerLock },
       ...(cfg.speakerLock ? { sal: { sal_mode: "locking" } } : {}),
-      // Vega always finishes its sentence: a nearby voice can't cut off a read-back or an alert.
-      // Speech during Vega's turn is handled after it ("append"), so an early "Confirmed" still counts.
+      // ARNIE always finishes its sentence: a nearby voice can't cut off a read-back or an alert.
+      // Speech during ARNIE's turn is handled after it ("append"), so an early "Confirmed" still counts.
       interruption: { enable: false, disabled_config: { strategy: "append" } },
       parameters: { data_channel: "rtm", enable_error_message: true },
       asr: { vendor: "ares", language: cfg.asrLanguage },
@@ -59,8 +59,8 @@ export function startAgent(cfg: AgoraConfig) {
         api_key: cfg.llmKey,
         vendor: "custom",
         style: "openai",
-        system_messages: [{ role: "system", content: "Vega, Operon's operating-room safety assistant." }],
-        greeting_message: "Vega ready.",
+        system_messages: [{ role: "system", content: "ARNIE, Operon's operating-room safety assistant." }],
+        greeting_message: "ARNIE ready.",
         failure_message: "Say that again.",
         max_history: 8,
         params: { model: "operon-brain" },

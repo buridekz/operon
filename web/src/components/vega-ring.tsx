@@ -1,21 +1,21 @@
 import { cn } from "@/lib/utils";
-import { VEGA_LABEL, type VegaState } from "@/lib/vega";
+import { VEGA_LABEL, type ArnieState } from "@/lib/vega";
 
-// The Operon mark and Vega's live indicator in one shape:
-// the ring is the "O" of Operon, the dot is Vega (the guide star), and the four ticks are the
+// The Operon mark and ARNIE's live indicator in one shape:
+// the ring is the "O" of Operon, the dot is ARNIE (the guide star), and the four ticks are the
 // case phases (Sign in · Time out · Surgery · Sign out), filled as each one completes.
 
 const TICK_ANGLES = [-90, 0, 90, 180]; // 12, 3, 6, 9 o'clock
 const STAR_ANGLE = -45; // between Sign in and Time out
 
-const stroke: Record<VegaState, string> = {
+const stroke: Record<ArnieState, string> = {
   off: "stroke-muted-foreground",
   listening: "stroke-teal",
   speaking: "stroke-teal",
   warning: "stroke-amber",
   critical: "stroke-critical",
 };
-const fill: Record<VegaState, string> = {
+const fill: Record<ArnieState, string> = {
   off: "fill-muted-foreground",
   listening: "fill-teal",
   speaking: "fill-teal",
@@ -28,13 +28,13 @@ const polar = (deg: number, r: number) => {
   return { x: 50 + r * Math.cos(a), y: 50 + r * Math.sin(a) };
 };
 
-export function VegaRing({
+export function ArnieRing({
   state = "listening",
   ticks = 4,
   size = 48,
   animate = true,
   className,
-}: { state?: VegaState; ticks?: number; size?: number; animate?: boolean; className?: string }) {
+}: { state?: ArnieState; ticks?: number; size?: number; animate?: boolean; className?: string }) {
   const star = polar(STAR_ANGLE, 34);
   return (
     <svg
@@ -76,7 +76,7 @@ export function VegaRing({
 export function Logo({ size = 32, className }: { size?: number; className?: string }) {
   return (
     <span className={cn("inline-flex items-center gap-2.5", className)}>
-      <span aria-hidden className="inline-flex"><VegaRing size={size} animate={false} /></span>
+      <span aria-hidden className="inline-flex"><ArnieRing size={size} animate={false} /></span>
       <span className="font-heading font-semibold tracking-tight" style={{ fontSize: size * 0.8 }}>operon</span>
     </span>
   );

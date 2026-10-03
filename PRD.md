@@ -2,7 +2,7 @@
 
 **Track:** Agora Track: Voice First · AWS Innovation Cup Championship · October 3–4, 2026
 **Domain:** Health (clinical workflow)
-**Product:** Operon · **Voice agent:** Vega (wake word: "Vega, …")
+**Product:** Operon · **Voice agent:** ARNIE (wake word: "ARNIE, …")
 **Version:** 3.1 (final hackathon scope + positioning)
 **Category:** Voice safety assistant for the operating room
 **Tagline:** No gloves off. No screens touched.
@@ -73,7 +73,7 @@ Use the emergency as the **setting** and safety under pressure as the **problem*
 > The surgeon's hands are inside a patient. Every screen in the room is out of reach.
 > The nurse is logging times, calling the blood bank and watching the patient, all at once.
 > And under that pressure, someone says the most dangerous words in surgery: 'Skip it, let's start.'
-> Vega doesn't skip."
+> ARNIE doesn't skip."
 
 Then go straight into the live blocked time-out.
 
@@ -127,7 +127,7 @@ CASE SETUP ─► SIGN IN ─► TIME OUT ─► DURING SURGERY ─► SIGN OUT 
 1. **Case setup (screen, before scrubbing).** Nurse enters patient, procedure, site, allergies, key pre-op values.
 2. **Sign in (voice).** Agent addresses each item to a role; each answer is logged with time and role.
 3. **Time out (voice).** Agent reads each item. **If an item is skipped, it announces "Time out not complete: <item> not confirmed" and will not proceed** until it is confirmed.
-4. **During surgery (voice, wake phrase "Vega, …").**
+4. **During surgery (voice, wake phrase "ARNIE, …").**
    - Event logging with read-back: "Tourniquet on, left thigh" → "Tourniquet, left thigh, 14:22. Confirm?" → "Confirmed" → logged, timer starts.
    - Lookups of recorded data: "When was the antibiotic given?" → "Cefazolin at 14:02, 38 minutes ago."
    - Allergy guard: "Give ampicillin" → "Caution: penicillin allergy recorded at sign-in."
@@ -220,7 +220,7 @@ We do not claim perfect speech accuracy. Safety comes from closed-loop read-back
 
 | Time | Beat |
 |---|---|
-| 0:00–0:30 | Hook: the 2 AM jeepney-crash story (§2b), ending on "Skip it, let's start. Vega doesn't skip." |
+| 0:00–0:30 | Hook: the 2 AM jeepney-crash story (§2b), ending on "Skip it, let's start. ARNIE doesn't skip." |
 | 0:30–1:30 | Time-out by voice; a teammate skips site marking; **Operon blocks it**; confirmed; complete |
 | 1:30–2:15 | Tourniquet read-back → confirmed → timer; "Give ampicillin" → penicillin allergy caution |
 | 2:15–3:15 | "Call vascular": **a teammate's phone in the audience rings**; the AI briefs them; they talk live |

@@ -4,27 +4,27 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Logo, VegaRing } from "@/components/vega-ring";
+import { Logo, ArnieRing } from "@/components/vega-ring";
 
 const steps = [
   { n: 1, title: "Set up the case", text: "Before anyone scrubs: patient, procedure, site and allergies. The only typing in the whole case." },
-  { n: 2, title: "Say “Vega, start time out”", text: "Vega runs the WHO checklist out loud, reads back every event and keeps the clock." },
+  { n: 2, title: "Say “ARNIE, start time out”", text: "ARNIE runs the WHO checklist out loud, reads back every event and keeps the clock." },
   { n: 3, title: "Sign the record", text: "The operative record is drafted from confirmed events, ready for the surgeon's sign-off." },
 ];
 
 const features = [
   { icon: ShieldCheck, title: "Won't skip a step", say: "Skip it, let's start.", text: "The time-out can't complete until every item is confirmed out loud." },
-  { icon: Repeat2, title: "Reads back first", say: "Vega, tourniquet on, left thigh.", text: "Nothing is logged until Vega reads it back and someone says “Confirmed.”" },
-  { icon: Pill, title: "Catches allergies and doses", say: "Giving ampicillin, one gram.", text: "Vega listens to the team, not just to commands. It speaks up when a drug conflicts with a recorded allergy or a dose differs from the chart's order. It never suggests a dose." },
-  { icon: Timer, title: "Watches the clock", say: "Vega, how long has the tourniquet been on?", text: "Tourniquet alerts at 60, 90 and 120 minutes, spoken and on the board." },
-  { icon: PhoneCall, title: "Calls a specialist", say: "Vega, call vascular.", text: "The specialist's phone rings and Vega briefs them from the confirmed log." },
-  { icon: ClipboardCheck, title: "Reconciles counts", say: "Vega, final count 10 sponges.", text: "Sponges, needles and implants are tracked; sign-out is blocked on a mismatch." },
+  { icon: Repeat2, title: "Reads back first", say: "ARNIE, tourniquet on, left thigh.", text: "Nothing is logged until ARNIE reads it back and someone says “Confirmed.”" },
+  { icon: Pill, title: "Catches allergies and doses", say: "Giving ampicillin, one gram.", text: "ARNIE listens to the team, not just to commands. It speaks up when a drug conflicts with a recorded allergy or a dose differs from the chart's order. It never suggests a dose." },
+  { icon: Timer, title: "Watches the clock", say: "ARNIE, how long has the tourniquet been on?", text: "Tourniquet alerts at 60, 90 and 120 minutes, spoken and on the board." },
+  { icon: PhoneCall, title: "Calls a specialist", say: "ARNIE, call vascular.", text: "The specialist's phone rings and ARNIE briefs them from the confirmed log." },
+  { icon: ClipboardCheck, title: "Reconciles counts", say: "ARNIE, final count 10 sponges.", text: "Sponges, needles and implants are tracked; sign-out is blocked on a mismatch." },
 ];
 
 const screens = [
-  { href: "/room", icon: Laptop, title: "Room", device: "Laptop in the OR", text: "Set up the case, check the mic, start Vega. This device is the room's microphone and speaker." },
+  { href: "/room", icon: Laptop, title: "Room", device: "Laptop in the OR", text: "Set up the case, check the mic, start ARNIE. This device is the room's microphone and speaker." },
   { href: "/board", icon: Monitor, title: "Wall board", device: "Big screen", text: "Live checklist, alerts, timers and counts, readable from across the room." },
-  { href: "/specialist", icon: Smartphone, title: "Specialist", device: "Specialist's phone", text: "Rings on “call vascular”, then hears Vega's briefing and joins the call." },
+  { href: "/specialist", icon: Smartphone, title: "Specialist", device: "Specialist's phone", text: "Rings on “call vascular”, then hears ARNIE's briefing and joins the call." },
   { href: "/record", icon: FileSignature, title: "Operative record", device: "After surgery", text: "The drafted record, grouped and printable, for the surgeon to sign." },
 ];
 
@@ -39,7 +39,7 @@ export default function Home() {
           </Link>
           <div className="hidden items-center gap-6 text-sm text-muted-foreground md:flex">
             <a href="#how" className="hover:text-foreground">How it works</a>
-            <a href="#features" className="hover:text-foreground">What Vega does</a>
+            <a href="#features" className="hover:text-foreground">What ARNIE does</a>
             <a href="#screens" className="hover:text-foreground">Screens</a>
           </div>
           <div className="flex items-center gap-2">
@@ -58,7 +58,7 @@ export default function Home() {
               No gloves off.<br />No screens touched.
             </h1>
             <p className="mt-5 max-w-xl text-lg leading-relaxed text-muted-foreground">
-              Operon&apos;s voice agent, <span className="font-medium text-foreground">Vega</span>, runs the surgical safety checklist out
+              Operon&apos;s voice agent, <span className="font-medium text-foreground">ARNIE</span> (Always Ready Nurse, In Emergencies), runs the surgical safety checklist out
               loud, reads back every critical event before it&apos;s logged, and calls in a specialist, so the sterile team never
               has to touch a screen.
             </p>
@@ -75,9 +75,9 @@ export default function Home() {
           <Card className="relative overflow-visible">
             <CardContent className="space-y-5 py-2">
               <div className="flex items-center gap-4">
-                <VegaRing state="listening" ticks={1} size={64} />
+                <ArnieRing state="listening" ticks={1} size={64} />
                 <div>
-                  <p className="font-heading text-xl font-semibold">Vega</p>
+                  <p className="font-heading text-xl font-semibold">ARNIE</p>
                   <p className="text-sm text-muted-foreground">OR 3 · Time out in progress</p>
                 </div>
               </div>
@@ -87,7 +87,7 @@ export default function Home() {
                   <p className="text-lg text-surgeon">&ldquo;Skip it, let&apos;s start.&rdquo;</p>
                 </div>
                 <div className="rounded-lg bg-amber-soft px-4 py-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-amber">Vega · warning</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-amber">ARNIE · warning</p>
                   <p className="text-lg text-amber">&ldquo;Time out not complete: site marking not confirmed.&rdquo;</p>
                 </div>
                 <div>
@@ -115,9 +115,9 @@ export default function Home() {
           </div>
         </section>
 
-        {/* What Vega does */}
+        {/* What ARNIE does */}
         <section id="features" className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6">
-          <h2 className="font-heading text-3xl font-semibold">What Vega does</h2>
+          <h2 className="font-heading text-3xl font-semibold">What ARNIE does</h2>
           <p className="mt-2 max-w-2xl text-muted-foreground">Say the wake word, then the command. Everything safety-critical is plain code with scripted replies.</p>
           <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {features.map((f) => (
@@ -163,7 +163,7 @@ export default function Home() {
           <div className="flex flex-col gap-4 rounded-xl border p-6 sm:flex-row sm:items-center">
             <ShieldCheck className="size-8 shrink-0 text-teal" aria-hidden />
             <p className="text-muted-foreground">
-              <span className="font-medium text-foreground">Vega assists, it doesn&apos;t decide.</span> It never gives medical advice
+              <span className="font-medium text-foreground">ARNIE assists, it doesn&apos;t decide.</span> It never gives medical advice
               or doses, every alert comes from information your team confirmed, and it doesn&apos;t replace anyone in the room.
             </p>
           </div>

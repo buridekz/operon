@@ -1,6 +1,6 @@
 # Operon
 
-A voice safety assistant for the operating room, built for the Agora Voice First track. Its voice agent is **Vega**: the team says "Vega, start time out."
+A voice safety assistant for the operating room, built for the Agora Voice First track. Its voice agent is **ARNIE** (Always Ready Nurse, In Emergencies): the team says "ARNIE, brief me."
 
 1. **Case setup** (screen, before scrubbing): patient, procedure, site, allergies.
 2. **Voice-led WHO checklist**: sign-in, time-out, sign-out. A skipped item blocks completion.
@@ -9,8 +9,8 @@ A voice safety assistant for the operating room, built for the Agora Voice First
 5. **Timers**: tourniquet alerts at 60 minutes and set intervals.
 6. **Specialist patch-in**: "Call vascular" joins a specialist to the Agora channel; the AI briefs them from the confirmed log, then they talk live.
 7. **Auto-drafted operative record** from confirmed events, for surgeon sign-off.
-8. **Case record on request**: "Vega, what are the allergies?", "what's the dose of cefazolin?", "how many sponges are on the field?"
-9. **CT by voice**: "Vega, show the CT", "go to the knee", "bone window", "coronal view", "play through the scan", "stop", "zoom in".
+8. **Case record on request**: "ARNIE, what are the allergies?", "what's the dose of cefazolin?", "how many sponges are on the field?"
+9. **CT by voice**: "ARNIE, show the CT", "go to the knee", "bone window", "coronal view", "play through the scan", "stop", "zoom in".
 
 ## Live
 

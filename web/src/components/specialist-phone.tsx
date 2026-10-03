@@ -77,7 +77,7 @@ export function SpecialistPhone() {
     }
   }
 
-  /** Hang up or decline: tell the OR, so Vega says so and goes back to normal. */
+  /** Hang up or decline: tell the OR, so ARNIE says so and goes back to normal. */
   async function hangUp() {
     await callRef.current?.leave();
     callRef.current = null;
@@ -123,7 +123,7 @@ export function SpecialistPhone() {
               {!connected && <p className="text-muted-foreground">Allow the microphone when your browser asks.</p>}
               {brief && (
                 <blockquote className="border-l-[3px] border-teal pl-3 text-lg leading-snug">
-                  <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.1em] text-teal">Vega briefing</span>
+                  <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.1em] text-teal">ARNIE briefing</span>
                   {brief.text}
                 </blockquote>
               )}

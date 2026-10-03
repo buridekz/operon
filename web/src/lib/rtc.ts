@@ -18,7 +18,7 @@ type Denoiser = import("agora-extension-ai-denoiser").AIDenoiserExtension;
 let denoiser: Promise<Denoiser | null> | null = null;
 
 /** Agora AI noise suppression on the room mic: background noise and nearby voices are filtered
- *  before Vega hears them. Desktop browsers only; if it can't run, the mic works as before. */
+ *  before ARNIE hears them. Desktop browsers only; if it can't run, the mic works as before. */
 async function suppressNoise(AgoraRTC: AgoraRTCModule, mic: IMicrophoneAudioTrack): Promise<boolean> {
   try {
     denoiser ??= import("agora-extension-ai-denoiser").then(({ AIDenoiserExtension }) => {
@@ -51,7 +51,7 @@ export async function joinChannel(
   const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
   client.on("user-published", async (user, mediaType) => {
     await client.subscribe(user, mediaType);
-    if (mediaType === "audio") user.audioTrack?.play(); // Vega's voice, and the other party
+    if (mediaType === "audio") user.audioTrack?.play(); // ARNIE's voice, and the other party
   });
   if (onUserJoined) client.on("user-joined", (u) => onUserJoined(u.uid));
 
