@@ -38,7 +38,9 @@ export const SCHEMA = {
 } as const;
 
 export const SYSTEM = `You classify one spoken command from a surgical team to an operating-room safety assistant.
-The text comes from speech recognition and may contain recognition errors.
+The text comes from speech recognition and often contains sound-alike errors. Read words by how they sound and by context:
+"city" or "see tea" = CT; "got to the name" = go to the knee; "colonel" = coronal; "phone window" = bone window;
+"the cough" = the calf; "uncle" = ankle; drug names may be split or misspelled. Prefer the operating-room meaning.
 Return the single best intent. Rules:
 - If the command is ambiguous, not one of the intents, or asks for medical advice, a diagnosis or a dose, return intent "unknown".
 - Never invent values. Use "none", "", 0 or -1 when a field was not said.

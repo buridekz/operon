@@ -5,6 +5,7 @@
 // The LLM may only produce an Intent. Every spoken reply is a template in this file, and
 // confirmations / checklist answers are never interpreted by a model.
 import { matchDrug, allergyConflict } from "./formulary.js";
+import { normalizeHeard } from "./asr.js";
 import { ctCommand, currentSlice, newImaging, LANDMARK_RE, PLAY_MS, type CtAction, type Imaging } from "./ct.js";
 import { findMedMention, fmtDose, parseDose, parseOrders, sameDose, unknownDrugWord, type Dose, type Order } from "./meds.js";
 
@@ -674,15 +675,16 @@ export function handle(state: State, text: string, now: number, opts: Opts): Tur
   if (state.checklist) {
     // A recognised wake-phrase command still works mid-checklist (e.g. an allergy catch);
     // anything else is treated as an answer to the current checklist question.
-    const cmd = woke ? ruleIntent(body) : null;
+    const cmd = woke ? ruleIntent(normalizeHeard(body)) : null;
     if (cmd) return applyIntent(state, cmd, now, opts);
     return answerChecklist(state, body, now);
   }
 
   if (!woke) return null; // ordinary OR conversation: ignore
   if (!body) return "Listening.";
-  const intent = ruleIntent(body);
-  return intent ? applyIntent(state, intent, now, opts) : { parse: body };
+  const cmd = normalizeHeard(body); // speech-recognition sound-alikes ("city" -> CT, "got to the name" -> go to the knee)
+  const intent = ruleIntent(cmd);
+  return intent ? applyIntent(state, intent, now, opts) : { parse: cmd };
 }
 
 /** Specialist joined the channel: the briefing Vega speaks to them. Only a ringing call can be
