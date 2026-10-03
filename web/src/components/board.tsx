@@ -231,7 +231,7 @@ function ConsultHero({ v }: { v: EngineView }) {
       <CardContent className="space-y-6">
         <p className="text-xl capitalize text-muted-foreground">{c.specialty} · {v.case.room}</p>
         {brief ? (
-          <blockquote className="border-l-4 border-teal pl-4 text-2xl leading-snug">
+          <blockquote className="rounded-lg bg-teal-soft px-5 py-4 text-2xl leading-snug">
             <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.1em] text-teal">Briefing from the confirmed log</span>
             {brief.text}
           </blockquote>
