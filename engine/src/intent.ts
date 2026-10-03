@@ -2,17 +2,17 @@
 // The model only classifies. Its output is a strict JSON schema of enums (plus short phrases
 // that are re-checked: drug names against the formulary), and applyIntent() decides everything else.
 import OpenAI from "openai";
-import { EMPTY_INTENT, SPECIALISTS, type Intent } from "./brain.js";
+import { EMPTY_INTENT, type Intent } from "./brain.js";
 
 export const SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["intent", "checklist", "side", "limb", "drug", "dose", "value", "specialty", "item", "quantity", "detail", "sponges", "needles", "milestone", "imaging"],
+  required: ["intent", "checklist", "side", "limb", "drug", "dose", "value", "specialty", "topic", "item", "quantity", "detail", "sponges", "needles", "milestone", "imaging"],
   properties: {
     intent: {
       type: "string",
       enum: ["start_checklist", "tourniquet_on", "tourniquet_off", "give_drug", "antibiotic_time", "preop_value", "call_specialist",
-        "tourniquet_time", "open_items", "final_count", "milestone", "imaging", "unknown"],
+        "tourniquet_time", "open_items", "final_count", "milestone", "imaging", "lookup", "unknown"],
     },
     checklist: { type: "string", enum: ["signin", "timeout", "signout", "none"] },
     side: { type: "string", enum: ["left", "right", "none"] },
@@ -20,7 +20,8 @@ export const SCHEMA = {
     drug: { type: "string", description: "Drug name exactly as heard, or empty." },
     dose: { type: "string", description: "Dose exactly as heard (e.g. '2 grams'), or empty." },
     value: { type: "string", enum: ["potassium", "hemoglobin", "none"] },
-    specialty: { type: "string", enum: [...Object.keys(SPECIALISTS), "none"] },
+    specialty: { type: "string", description: "call_specialist: the medical specialty (an informal description normalised, e.g. 'the hip guy' -> 'orthopedics', 'the heart doctor' -> 'cardiology') or the doctor's name as heard (e.g. 'Dr. Valdez'), or 'none'." },
+    topic: { type: "string", enum: ["allergies", "orders", "procedure", "patient", "counts", "given", "milestones", "none"] },
     item: { type: "string", enum: ["sponge", "needle", "suture", "implant", "none"] },
     quantity: { type: "integer", description: "How many items were opened; 0 if not said." },
     detail: { type: "string", description: "Suture type (e.g. '4-0 Prolene') or implant description as heard, or empty." },
@@ -40,7 +41,12 @@ Return the single best intent. Rules:
 - open_items: sponges/lap pads -> item "sponge"; loose needles -> "needle"; a suture like "4-0 Prolene" -> item "suture" with detail; an implant/graft/mesh/plate/screw -> item "implant" with detail.
 - final_count: the team states the final count of sponges and/or needles.
 - milestone: incision or closure being called.
-- imaging: showing/hiding/scrolling/zooming/rotating the pre-op images.`;
+- imaging: showing/hiding/scrolling/zooming/rotating the pre-op images.
+- call_specialist: put the medical specialty into "specialty", normalising informal words ("the bone doctor" -> "orthopedics",
+  "the anaesthetist" -> "anesthesia", "the vessel surgeon" -> "vascular"); if a doctor is named instead, copy the name.
+- lookup: a question asking to hear something already in the case record (allergies, ordered medications or a drug's ordered dose
+  with the drug in "drug", what has been given, sponge/needle counts, incision/closure times, the procedure or site, the patient).
+  A question about a pre-op lab value is preop_value; about tourniquet time is tourniquet_time; about the antibiotic time is antibiotic_time.`;
 
 export const supportsTemperature = (model: string) => /^gpt-(3|4)/.test(model);
 

@@ -37,6 +37,7 @@ const GROUPS: { title: string; fields: Field[] }[] = [
       { name: "procedure", label: "Procedure", value: "Exploration and repair, left femoral artery", wide: true },
       { name: "site", label: "Surgical site", value: "left thigh" },
       { name: "summary", label: "One-line summary", value: "58-year-old male, left femoral bleed", hint: "Vega reads this to a specialist you call in." },
+      { name: "specialists", label: "On-call specialists", value: "vascular: Dr. Valdez; orthopedics: Dr. Lim; anesthesia: Dr. Ramos", hint: "Specialty: name, separated by semicolons. Say “Vega, call vascular” or the doctor’s name.", wide: true },
     ],
   },
   {
@@ -58,6 +59,7 @@ function caseFromForm(form: HTMLFormElement): CaseSetup {
     allergies: get("allergies").split(",").map((s) => s.trim()).filter(Boolean),
     preop: { potassium: get("potassium"), hemoglobin: get("hemoglobin") },
     orders: get("orders"),
+    specialists: get("specialists"),
   };
 }
 

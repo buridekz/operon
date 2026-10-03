@@ -37,13 +37,36 @@ export const CHECKLISTS: Record<ChecklistName, { title: string; items: Item[] }>
   },
 };
 
-export const SPECIALISTS = {
+/** Default on-call roster, used when the case setup doesn't list one. */
+export const SPECIALISTS: Record<string, string> = {
   vascular: "Dr. Valdez",
   anesthesia: "Dr. Ramos",
   orthopedics: "Dr. Lim",
   neurosurgery: "Dr. Cruz",
-} as const;
-export type Specialty = keyof typeof SPECIALISTS;
+};
+export type OnCall = { specialty: string; doctor: string };
+
+/** "vascular: Dr. Valdez; orthopedics: Dr. Lim" -> the on-call roster for this case. */
+export function parseRoster(text: string | undefined): OnCall[] {
+  const typed = (text ?? "").split(/[;\n]+/).map((p) => p.split(/[:=]/)).filter((p) => p.length >= 2)
+    .map(([s, ...d]) => ({ specialty: s.toLowerCase().replace(/[^a-z\s]/g, "").trim(), doctor: d.join(":").trim() }))
+    .filter((r) => r.specialty && r.doctor);
+  return typed.length ? typed : Object.entries(SPECIALISTS).map(([specialty, doctor]) => ({ specialty, doctor }));
+}
+
+/** Who to call for what was heard: a specialty ("vascular", "ortho") or a doctor's name ("Valdez"). */
+function findOnCall(state: State, heard: string): OnCall | null {
+  const h = heard.toLowerCase().replace(/^dr\.?\s+/, "").replace(/[^a-z\s]/g, "").trim();
+  if (h.length < 3) return null;
+  const last = h.split(/\s+/).at(-1)!;
+  const roster = state.case.specialists;
+  const stem = (x: string) => x.replace(/[^a-z]/g, "").replace(/ae/g, "e").slice(0, 5);
+  return roster.find((r) => r.specialty === h)
+    ?? roster.find((r) => r.specialty.startsWith(h) || h.startsWith(r.specialty))
+    ?? roster.find((r) => h.split(/\s+/)[0].length >= 4 && stem(h.split(/\s+/)[0]) === stem(r.specialty))
+    ?? roster.find((r) => r.doctor.toLowerCase().replace(/[^a-z\s]/g, " ").split(/\s+/).includes(last))
+    ?? null;
+}
 
 export const MILESTONES = { incision: "Incision", closure: "Closure" } as const;
 export type Milestone = keyof typeof MILESTONES;
@@ -55,7 +78,7 @@ export type Intent = {
   intent:
     | "start_checklist" | "tourniquet_on" | "tourniquet_off" | "give_drug" | "antibiotic_time"
     | "preop_value" | "call_specialist" | "tourniquet_time"
-    | "open_items" | "final_count" | "milestone" | "imaging" | "unknown";
+    | "open_items" | "final_count" | "milestone" | "imaging" | "lookup" | "unknown";
   checklist: ChecklistName | "none";
   side: "left" | "right" | "none";
   limb: "thigh" | "arm" | "leg" | "forearm" | "calf" | "none";
@@ -63,7 +86,10 @@ export type Intent = {
   /** give_drug: the dose as heard ("2 grams"), or empty. */
   dose: string;
   value: "potassium" | "hemoglobin" | "none";
-  specialty: Specialty | "none";
+  /** call_specialist: the specialty or doctor's name as heard, or "none". */
+  specialty: string;
+  /** lookup: what the team asked to hear from the case record. */
+  topic: "allergies" | "orders" | "procedure" | "patient" | "counts" | "given" | "milestones" | "none";
   /** open_items: what was opened, how many, and a description (e.g. "4-0 Prolene", "6 mm PTFE graft"). */
   item: "sponge" | "needle" | "suture" | "implant" | "none";
   quantity: number;
@@ -76,7 +102,7 @@ export type Intent = {
 };
 
 export const EMPTY_INTENT: Intent = {
-  intent: "unknown", checklist: "none", side: "none", limb: "none", drug: "", dose: "", value: "none", specialty: "none",
+  intent: "unknown", checklist: "none", side: "none", limb: "none", drug: "", dose: "", value: "none", specialty: "none", topic: "none",
   item: "none", quantity: 0, detail: "", sponges: -1, needles: -1, milestone: "none", imaging: "none",
 };
 
@@ -85,6 +111,8 @@ export type CaseSetup = {
   allergies?: string[]; preop?: Record<string, string>; antibioticGiven?: { drug: string; at: number } | null;
   /** Ordered medications from the chart, e.g. "cefazolin 2 g; heparin 5000 units". Doses heard are checked against these. */
   orders?: string;
+  /** On-call roster, e.g. "vascular: Dr. Valdez; orthopedics: Dr. Lim". */
+  specialists?: string;
 };
 export type Severity = "info" | "warning" | "critical";
 export type LogEntry = {
@@ -101,14 +129,16 @@ type Pending =
   | { kind: "milestone"; milestone: Milestone; at: number };
 
 export type State = {
-  case: Required<Omit<CaseSetup, "antibioticGiven" | "orders">> & { antibioticGiven: { drug: string; at: number } | null; orders: Order[] };
+  case: Required<Omit<CaseSetup, "antibioticGiven" | "orders" | "specialists">> & {
+    antibioticGiven: { drug: string; at: number } | null; orders: Order[]; specialists: OnCall[];
+  };
   phase: "idle" | ChecklistName | "surgery" | "done";
   checklist: { name: ChecklistName; index: number; done: Record<string, boolean>; blocked: boolean; askedAt: number; settleMs: number } | null;
   completed: Partial<Record<ChecklistName, number>>;
   pending: Pending | null;
   log: LogEntry[];
   tourniquet: { side: string; start: number; alerts: number[] } | null;
-  consult: { specialty: Specialty; doctor: string; state: "ringing" | "live" | "ended"; start: number } | null;
+  consult: { specialty: string; doctor: string; state: "ringing" | "live" | "ended"; start: number } | null;
   counts: Record<CountItem, number>; // opened onto the field
   finalCount: Record<CountItem, number> | null;
   implants: { time: string; name: string }[];
@@ -129,6 +159,7 @@ const WAKE = /\bvegas?\b/i;
 const YES = /\b(confirm(ed)?|yes|yep|correct|complete(d)?|done|affirmative|marked|given|none|no concerns?|labell?ed|off)\b/i;
 const CONFIRM = /\b(confirm(ed)?|yes|correct|affirmative)\b/i;
 const NO = /\b(cancel|no,? wait|wrong|correction|negative|scratch that)\b/i;
+const QUESTION = /^(what|whats|what's|which|how many|how much|when|who|tell me|remind me|read( me)? back|any|is there|are there|do we have|list|check)\b|\?$/i;
 const SKIP = /\b(skip|let'?s (just )?start|move on|later|no time|we'?re late|go ahead without)\b/i;
 export const SAY_AGAIN = "Sorry, say that again.";
 
@@ -160,6 +191,7 @@ export function createState(setup: CaseSetup = {}): State {
       preop: setup.preop ?? { potassium: "3.9", hemoglobin: "9.8" },
       antibioticGiven: setup.antibioticGiven ?? null,
       orders: parseOrders(setup.orders),
+      specialists: parseRoster(setup.specialists),
     },
     phase: "idle",
     checklist: null,
@@ -256,6 +288,16 @@ function answerChecklist(state: State, text: string, now: number): string | null
   return `${list.title} complete.`;
 }
 
+/** The first listed drug named anywhere in a sentence, or "". */
+function drugNamedIn(t: string): string {
+  const w = t.replace(/[^a-z\s]/g, " ").split(/\s+/).filter(Boolean);
+  for (let i = 0; i < w.length; i++) {
+    const hit = matchDrug(w.slice(i, i + 2).join(" "), 6) ?? matchDrug(w[i], 6);
+    if (hit) return hit;
+  }
+  return "";
+}
+
 /** Fast, deterministic command parsing. Returns null when the rules cannot tell what was meant. */
 export function ruleIntent(body: string): Intent | null {
   const t = body.toLowerCase();
@@ -275,7 +317,7 @@ export function ruleIntent(body: string): Intent | null {
   if (/\bzoom out\b/.test(t)) return I({ intent: "imaging", imaging: "zoom_out" });
   if (/\brotate\b/.test(t)) return I({ intent: "imaging", imaging: "rotate" });
 
-  if (/tourniquet/.test(t) && /(how long|time)\b/.test(t) && !/\b(on|off)\b/.test(t)) return I({ intent: "tourniquet_time" });
+  if (/tourniquet/.test(t) && /\b(how long|minutes|time)\b/.test(t) && (QUESTION.test(t) || !/\b(on|off)\b/.test(t))) return I({ intent: "tourniquet_time" });
   m = t.match(/tourniquet\s+(on|off)(?:[,\s]+(?:the\s+)?(left|right)\s+(thigh|arm|leg|forearm|calf))?/);
   if (m) return I({ intent: m[1] === "on" ? "tourniquet_on" : "tourniquet_off", side: (m[2] as Intent["side"]) ?? "none", limb: (m[3] as Intent["limb"]) ?? "none" });
 
@@ -300,6 +342,18 @@ export function ruleIntent(body: string): Intent | null {
   m = body.match(/\bimplant(?:ing|ed)?\s+(?:(?:a|an|the|one)\s+)?(.+)$/i);
   if (m) return I({ intent: "open_items", item: "implant", quantity: 1, detail: m[1].replace(/[.,!?]+$/, "").trim() });
 
+  // Questions about the case record: read back, never logged. (Antibiotic time, pre-op labs and the
+  // tourniquet clock have their own answers below.)
+  if (QUESTION.test(t) && !/\b(antibiotic|potassium|hemoglobin|haemoglobin|tourniquet)\b/.test(t)) {
+    if (/\ballerg/.test(t)) return I({ intent: "lookup", topic: "allergies" });
+    if (/\b(ordered|orders?|dose|how much)\b/.test(t)) return I({ intent: "lookup", topic: "orders", drug: drugNamedIn(t) });
+    if (/\b(given|meds|medications|drugs)\b/.test(t)) return I({ intent: "lookup", topic: "given" });
+    if (/\b(sponges?|needles?|counts?)\b/.test(t) && !/\bfinal count\b/.test(t)) return I({ intent: "lookup", topic: "counts" });
+    if (/\b(incision|closure|closing)\b/.test(t)) return I({ intent: "lookup", topic: "milestones" });
+    if (/\b(procedure|operation|surgery|site|side)\b/.test(t)) return I({ intent: "lookup", topic: "procedure" });
+    if (/\b(patient|who)\b/.test(t)) return I({ intent: "lookup", topic: "patient" });
+  }
+
   // Milestones
   if (/\b(skin\s+)?incision\b/.test(t)) return I({ intent: "milestone", milestone: "incision" });
   if (/\bclos(ure|ing)\b/.test(t)) return I({ intent: "milestone", milestone: "closure" });
@@ -311,8 +365,10 @@ export function ruleIntent(body: string): Intent | null {
   m = t.match(/\b(potassium|hemoglobin|haemoglobin)\b/);
   if (m) return I({ intent: "preop_value", value: m[1].replace("haemo", "hemo") as Intent["value"] });
 
-  m = t.match(/\bcall\s+(?:dr\.?\s+)?([a-z]+)/);
-  if (m && m[1] in SPECIALISTS) return I({ intent: "call_specialist", specialty: m[1] as Specialty });
+  m = t.match(/\b(?:call|page)\s+((?:dr\.?\s+)?[a-z]+(?:\s+[a-z]+)?)/);
+  if (m && !/^(me|the|a|it|him|her|them|back)\b/.test(m[1])) {
+    return I({ intent: "call_specialist", specialty: m[1].replace(/\s+(please|now|in|for|to)$/, "") });
+  }
 
   return null;
 }
@@ -441,17 +497,65 @@ export function applyIntent(state: State, intent: Intent, now: number, opts: Opt
     }
 
     case "call_specialist": {
-      if (intent.specialty === "none") return "Which specialist?";
-      const doctor = SPECIALISTS[intent.specialty];
-      state.consult = { specialty: intent.specialty, doctor, state: "ringing", start: now };
-      addLog(state, now, `Consult requested: ${intent.specialty}`, "consult");
-      return `Calling ${doctor}, ${intent.specialty}.`;
+      if (!intent.specialty || intent.specialty === "none") return "Which specialist?";
+      const who = findOnCall(state, intent.specialty);
+      if (!who) return `No on-call ${intent.specialty.replace(/^dr\.?\s+/i, "")} is listed for this case.`;
+      state.consult = { specialty: who.specialty, doctor: who.doctor, state: "ringing", start: now };
+      addLog(state, now, `Consult requested: ${who.specialty}`, "consult");
+      return `Calling ${who.doctor}, ${who.specialty}.`;
     }
+
+    case "lookup":
+      return lookup(state, intent);
 
     case "tourniquet_time":
       if (!state.tourniquet) return "No tourniquet is recorded.";
       return `Tourniquet, ${state.tourniquet.side}, ${minutesSince(state.tourniquet.start, now, opts.minuteMs)} minutes.`;
 
+    default:
+      return SAY_AGAIN;
+  }
+}
+
+const list = (xs: string[]) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
+const withDose = (o: Order) => `${o.drug}${o.dose ? ` ${fmtDose(o.dose)}` : ""}`;
+
+/** Read back what the case record holds. Facts only: nothing here is advice or inferred. */
+function lookup(state: State, intent: Intent): string {
+  const c = state.case;
+  switch (intent.topic) {
+    case "allergies":
+      return c.allergies.length ? `Allergies on record: ${list(c.allergies)}.` : "No allergies recorded.";
+    case "orders": {
+      const drug = intent.drug ? matchDrug(intent.drug) : null;
+      if (drug) {
+        const o = c.orders.find((x) => x.drug === drug);
+        if (!o) return `No order for ${drug} on record.`;
+        return o.dose ? `${cap(drug)} is ordered at ${fmtDose(o.dose)}.` : `${cap(drug)} is ordered, with no dose on record.`;
+      }
+      return c.orders.length ? `Ordered: ${list(c.orders.map(withDose))}.` : "No medication orders on record.";
+    }
+    case "given": {
+      const given = state.log.filter((l) => l.kind === "drug").map((l) => `${l.text.replace(/ given$/, "")} at ${l.time}`);
+      return given.length ? `Given: ${list(given)}.` : "No medications logged yet.";
+    }
+    case "counts": {
+      const { sponge, needle } = state.counts;
+      if (!sponge && !needle) return "No sponges or needles recorded yet.";
+      const field = `On the field: ${plural(sponge, "sponge")}, ${plural(needle, "needle")}.`;
+      if (!state.finalCount) return field;
+      const r = reconcile(state);
+      return `${field} Final count ${r.ok ? "reconciled" : `not reconciled: ${r.missing.join(", ")}`}.`;
+    }
+    case "milestones": {
+      const done = (Object.keys(MILESTONES) as Milestone[]).filter((k) => state.milestones[k] != null)
+        .map((k) => `${MILESTONES[k]} at ${clock(state.milestones[k]!)}`);
+      return done.length ? `${list(done)}.` : "No incision recorded yet.";
+    }
+    case "procedure":
+      return `${cap(c.procedure)}, ${c.site}.`;
+    case "patient":
+      return `${c.patient}. ${cap(c.summary)}.`;
     default:
       return SAY_AGAIN;
   }
@@ -531,6 +635,7 @@ export function handle(state: State, text: string, now: number, opts: Opts): Tur
   // A consult in progress: "Vega, end consult" ends it. While the specialist is on the line, only
   // speech addressed to Vega is handled, so the team's talk with them is never taken as an answer.
   // While it is still ringing, Vega works as usual.
+  if (woke && END_CONSULT.test(body) && (!state.consult || state.consult.state === "ended")) return "No consult in progress.";
   if (state.consult && state.consult.state !== "ended") {
     if (woke && END_CONSULT.test(body)) return endConsult(state, now, "room");
     if (state.consult.state === "live" && !woke) return null;

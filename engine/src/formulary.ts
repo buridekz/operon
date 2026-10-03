@@ -44,7 +44,9 @@ const ALIASES: Record<string, string> = {
   lovenox: "enoxaparin", narcan: "naloxone", versed: "midazolam", valium: "diazepam", diprivan: "propofol", zofran: "ondansetron",
   dilaudid: "hydromorphone", demerol: "pethidine", meperidine: "pethidine", adrenaline: "epinephrine", noradrenaline: "norepinephrine",
   lignocaine: "lidocaine", xylocaine: "lidocaine", marcaine: "bupivacaine", lasix: "furosemide", anectine: "succinylcholine", tranexamic: "tranexamic acid",
-  hibiclens: "chlorhexidine", "povidone iodine": "povidone",
+  hibiclens: "chlorhexidine", "povidone iodine": "povidone", txa: "tranexamic acid", cyklokapron: "tranexamic acid",
+  pip: "piperacillin", "pip tazo": "piperacillin", vanc: "vancomycin", vanco: "vancomycin", gent: "gentamicin", epi: "epinephrine",
+  levophed: "norepinephrine", neo: "phenylephrine", sux: "succinylcholine", roc: "rocuronium", sugam: "sugammadex", bridion: "sugammadex",
 };
 
 export const FORMULARY = Object.keys(DRUG_TAGS);
