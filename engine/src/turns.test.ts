@@ -14,7 +14,7 @@ describe("Agora silent-turn accumulation", () => {
   });
 
   test("replay of the live failure: a stale 'Confirmed.' no longer confirms the antibiotic", () => {
-    const T0 = new Date("2026-10-04T14:20:00").getTime();
+    const T0 = new Date("2026-10-04T14:20:00+08:00").getTime();
     const opts = { minuteMs: 60000 };
     const s = createState();
     const turns = new TurnTracker();
