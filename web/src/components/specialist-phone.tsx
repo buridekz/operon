@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Logo } from "@/components/vega-ring";
 import { cn } from "@/lib/utils";
 import { engine } from "@/lib/engine";
 import { joinChannel, type Call } from "@/lib/rtc";
@@ -77,7 +78,8 @@ export function SpecialistPhone() {
   const state = joined ? "Connected" : consult?.state === "ringing" ? "Ringing…" : consult?.state === "ended" ? "Ended" : consult ? "Live" : "Idle";
 
   return (
-    <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-4 py-10">
+    <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center gap-6 px-4 py-10">
+      <Logo size={26} className="self-center" />
       <Card className={cn("transition-shadow", (ringing || joined) && "ring-2 ring-teal", ringing && "animate-pulse")}>
         <CardHeader>
           <CardTitle className="font-heading text-3xl">{consult?.doctor ?? "On call"}</CardTitle>
