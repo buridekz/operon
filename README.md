@@ -16,11 +16,12 @@ Built on **Agora Conversational AI**, with every safety decision made by determi
 
 ## 😟 The problem
 
-- 🧤 In surgery the hands are sterile, so every note, lookup and phone call falls to one circulating nurse.
-- ⏱️ Busy teams rush safety checks, and a spoken order can be misheard.
-- 🖥️ Fetching a scan or entering a timestamp means touching a keyboard, which pulls attention away from the patient.
+- 🚑 **Too few hands.** In a mass-casualty event or an understaffed hospital, operating rooms run with the smallest possible team, and every minute of delay costs.
+- 🧤 **The sterile team can't touch anything.** Once scrubbed in, the surgeon and scrub nurse can't touch a keyboard, a mouse or a phone without breaking sterility.
+- 🧑‍⚕️ **So it all falls on one person.** The circulating nurse, the only unscrubbed member, has to type timestamps, fetch scans, look up the chart, call specialists and double-check drugs, all while being needed by the patient.
+- ⚠️ **That's where mistakes slip through.** A rushed check, a misheard drug or dose, or a delayed scan is exactly the kind of error that happens when one person is stretched too thin.
 
-**Operon fixes this with voice.** The team talks naturally, and ARNIE handles the screen, the log and the safety checks. 🎙️
+**Operon fixes this with voice.** The team talks naturally, and ARNIE handles the screen, the log and the safety checks, so the nurse can stay with the patient. 🎙️
 
 ## ✨ Key features
 
