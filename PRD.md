@@ -7,6 +7,8 @@
 **Category:** Voice safety assistant for the operating room
 **Tagline:** No gloves off. No screens touched.
 
+> **Note:** this is the original product scope. What is built and running today is described in the [README](README.md); the demo centres on the briefing, voice-logged events, allergy and dose cautions, CT by voice, specialist consults and the end-of-case summary.
+
 ---
 
 ## 1. Summary

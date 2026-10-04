@@ -39,7 +39,7 @@ Open `http://localhost:3001/room` (room device), `/board` (big screen), `/specia
 | Hearing the room | AI: Agora ARES speech recognition |
 | Command understanding | Rules first; if they can't tell, **OpenAI with a strict JSON schema of enums** (fallback only) |
 | Drug names | Deterministic formulary match (`formulary.ts`); unclear → "Which drug?" |
-| Checklists, skip-blocking, read-back, confirmations, allergy guard, timers, briefing, record | **Deterministic code + scripted text** (`brain.ts`) |
+| Read-back, confirmations, allergy and dose guard, timers, briefing, CT control, summary facts | **Deterministic code + scripted text** (`brain.ts`) |
 | Medical decisions, dosing | **Never**: out of scope by design |
 
 Confirmations ("Confirmed") and checklist answers are never sent to the LLM.
@@ -50,29 +50,24 @@ Confirmations ("Confirmed") and checklist answers are never sent to the LLM.
 
 | Say | ARNIE |
 |---|---|
-| "ARNIE, start time out." | "Time out. Team, confirm patient name and procedure." |
-| "Juan Cruz, femoral repair. Confirmed." | "Surgeon, is the site marked?" |
-| "Skip it, let's start." | **"Time out not complete: site marking not confirmed."** |
-| "Site marked, left thigh. Confirmed." → "Given." → "None expected, confirmed." | … "Time out complete." |
-| "ARNIE, tourniquet on, left thigh." → "Confirmed." | Read-back, then "Logged." (timer starts) |
-| "ARNIE, give ampicillin." (works even mid-checklist) | **"Caution: penicillin allergy recorded at sign-in."** |
-| "ARNIE, when was the antibiotic given?" / "read back the potassium" | Read-back from the record |
-| "ARNIE, skin incision." → "Confirmed." | Milestone logged (also "closure") |
-| "ARNIE, opening 10 sponges." / "opening a 4-0 Prolene." → "Confirmed." | Counts on the field (sutures add a needle) |
-| "ARNIE, implant a 6 millimeter PTFE graft." → "Confirmed." | Implant recorded for the chart |
-| "ARNIE, final count 9 sponges, 1 needle." → "Confirmed." | **"Count mismatch: 1 sponge unaccounted."** (critical) |
-| "ARNIE, show the pre-op CT" · "next slice" · "zoom in" · "rotate" · "close the images" | Simulated CT on the board |
-| "ARNIE, call vascular." | Specialist phone rings → on answer, AI briefing |
-| "ARNIE, end consult." · "ARNIE, sign out." | Sign-out won't accept "counts correct" until counts reconcile |
+| "ARNIE, who are you?" | Introduces itself and what it does |
+| "ARNIE, brief me." | Reads the case, allergies and ordered medications |
+| "Okay team, starting the operation." → "Confirmed." | "Operation start, incision, 08:52. Confirm?" → "Logged." (the operation clock starts) |
+| "ARNIE, show the CT." · "go to the knee." · "zoom in." · "close the images." | CT sample study on the board, driven by voice |
+| "Giving penicillin." | **"Caution: penicillin allergy recorded at sign-in. Penicillin not logged."** |
+| "Hang cefazolin twenty grams." | **A caution that the ordered dose is 2 grams; nothing is logged** |
+| "Giving cefazolin two grams." → "Confirmed." | Read-back, then "Logged." |
+| "ARNIE, call vascular." | The specialist's phone rings; on answer, ARNIE briefs them |
+| "ARNIE, end consult." | "Consult ended." |
+| "Closing." → "Confirmed." | "Operation end, closure, 08:56. Confirm?" → "Logged. Operation ended, 4 minutes." |
+| "ARNIE, give me the summary." | Spoken summary of start, end, duration, cautions and consults |
 
-Messy phrasing ("put the cuff up on her left leg", "get me the vascular surgeon on the phone") is parsed by the OpenAI fallback into the same commands, with the same read-back. Dose questions return "Say that again."
-
-`DEMO_MINUTE_MS=1000` makes the 60-minute tourniquet alert fire after 60 seconds. Rehearse without a mic using the box on `/room`.
+Messy phrasing is parsed by the OpenAI fallback into the same commands, with the same read-back. Dose questions return "Say that again." `DEMO_MINUTE_MS=1000` makes one case minute last one second for a short demo (use `60000` for real time). Rehearse without a mic using the box on `/room`.
 
 ## Tests
 
 ```bash
-npm test          # Vitest: 34 tests (brain, counts, imaging, formulary, LLM boundary, Agora turn handling)
+npm test          # Vitest: 158 tests (brain, overhearing, medications, lookups, imaging, conversation, ASR fixes, Agora turn handling)
 npm run typecheck
 ```
 
@@ -92,4 +87,3 @@ Tested end to end: synthesized speech → `/room` mic → Agora ARES → `/chat/
 - The agent listens to the **room mic only** (`remote_rtc_uids` supports one UID).
 - Quick-tunnel URLs change on restart: update `PUBLIC_URL` and restart the engine.
 - Watch Agora minutes; press Stop on `/room` when not rehearsing.
-- Rotate the App Certificate after the event (it was shared in chat).

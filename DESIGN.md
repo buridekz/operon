@@ -254,7 +254,7 @@ Calm by default: "All clear" with a grey check and a one-line count of mistakes 
 There is no nav bar. Each surface has a slim header: the Operon logo at 24px on the left, then context on the right (Room: a status dot plus "OR · patient" in 15px Secondary Grey, or "Step n of 3 · label" in 13px Tertiary Grey during setup; Board: tone toggle capsule, connection dot and the 34px clock).
 
 ### ARNIE Orb (signature)
-The thinking-orbs dotted canvas orb, drawn in its 300px design space at 176px (Board), 220px (mic check) or 280px (Room live). Each mood maps to an orb animation and a word: Off and Paused breathe at quarter speed and 35% opacity; Listening listens; Thinking works; Speaking composes; Warning and Alert solve, tinted System Yellow or System Red. At mic check its speed follows the microphone level. Opacity changes ease over 700ms; under reduced motion it draws a single still frame.
+The thinking-orbs dotted canvas orb, drawn in its 300px design space at 176px (Board), 220px (mic check) or 280px (Room live). Each mood maps to an orb animation and a word: Off breathes at quarter speed and 35% opacity; Listening listens; Thinking works; Speaking composes; Warning and Alert solve, tinted System Yellow or System Red. At mic check its speed follows the microphone level. Opacity changes ease over 700ms; under reduced motion it draws a single still frame.
 
 ## Do's and Don'ts
 

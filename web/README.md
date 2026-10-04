@@ -5,7 +5,7 @@ Next.js 16 (App Router) + TypeScript + Tailwind 4 + shadcn/ui. The screens of Op
 | Route | Device | What it does |
 |---|---|---|
 | `/room` | Laptop or phone in the OR | Case setup before scrubbing; then joins the Agora channel as the room mic + speaker and starts the agent |
-| `/board` | Big screen | Live checklist, conversation, tourniquet timer, consult status, case log |
+| `/board` | Big screen | Case, allergy and order strip, alerts, CT viewer, operation clock, conversation, consult status, case log |
 | `/specialist` | Teammate's phone | Rings on "call vascular", answers into the Agora channel, shows ARNIE's briefing |
 
 The brain (voice agent "ARNIE") lives in `../engine`. This app talks to it over HTTP + Server-Sent Events; the engine URL is read at runtime from `/engine-url` (env `ENGINE_URL`), so a new tunnel needs no rebuild.

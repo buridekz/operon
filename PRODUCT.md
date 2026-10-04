@@ -31,7 +31,7 @@ An ambient, voice-only safety layer: it overhears normal team talk instead of wa
 ## Capabilities and Constraints
 
 - Next.js 16 + React 19 + Tailwind 4 + shadcn (base-nova); engine in Node/TypeScript; voice via Agora Conversational AI.
-- ARNIE states the UI must show: listening, thinking/answering, speaking, warning, critical, paused, off.
+- ARNIE states the UI must show: listening, thinking, speaking, warning, critical, off.
 - Alert severity follows IEC 60601-1-8 conventions: red critical, yellow warning; informational stays calm.
 - The CT is a real, de-identified sample study (TCIA, CC BY 3.0) and must stay labelled as a sample study with credit.
 - Assistant orb: `thinking-orbs` (MIT, monochrome dotted canvas orbs) chosen by the user.
