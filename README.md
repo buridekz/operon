@@ -2,18 +2,21 @@
 
 A voice safety assistant for the operating room, built for the Agora Voice First track. Its voice agent is **ARNIE** (Always Ready Nurse, In Emergencies): the team says "ARNIE, brief me." ARNIE listens to the room, speaks up only when what it hears conflicts with the patient's chart, and keeps the team's hands off the screen.
 
-## What it does
+## Features
 
-1. **Case setup** (one screen, before scrubbing): patient, procedure, site, allergies, ordered medications, on-call specialists and patient notes.
-2. **Briefing on request**: "ARNIE, brief me" reads the case, allergies and orders aloud.
-3. **Read-back event log**: "Okay team, starting the operation" → "Operation start, incision, 08:52. Confirm?" → "Confirmed." Nothing is logged without a spoken confirmation.
-4. **Overhears the team** (no wake word): "Giving penicillin" → "Caution: penicillin allergy recorded at sign-in. Penicillin not logged." A stated dose that differs from the ordered dose is flagged too. It checks what is said against the chart; it never suggests a dose.
-5. **CT by voice**: "ARNIE, show the CT", "go to the knee", "bone window", "coronal view", "zoom in", "close the images".
-6. **Answers from the case record**: "ARNIE, what are the allergies?", "is the patient diabetic?", "how long has the operation been going?"
-7. **Specialist patch-in**: "ARNIE, call vascular" rings a specialist's phone into the Agora channel; ARNIE briefs them from the chart, then they talk live.
-8. **End-of-case summary**: "Closing." → "Confirmed." → "ARNIE, give me the summary." (start, end, duration, cautions, consults).
+- **Hands-free case briefing.** ARNIE summarizes the patient, procedure, allergies, ordered medications and pre-op values on request, so nobody has to open a chart.
+- **Voice-logged events with read-back.** Milestones such as the start and end of the operation are read back with the time and logged only after a spoken confirmation. A wrong or misheard entry never reaches the record.
+- **Allergy and dose safety net.** ARNIE overhears normal team talk, with no wake word, and checks any drug it hears against the recorded allergies and the ordered doses. It speaks up on a conflict and holds the entry. It checks against the chart and never suggests a dose.
+- **CT viewer by voice.** A CT study opens on the wall board and is controlled entirely by voice: scroll slices, jump to anatomical landmarks, change windows and planes, zoom, pan and rotate.
+- **Answers from the case record.** Questions about the patient, the chart and the running case are answered from the record. If something is not in the record, ARNIE says so.
+- **Specialist patch-in.** ARNIE calls an on-call specialist onto the same Agora channel, briefs them from the chart and then steps back while the humans talk.
+- **End-of-case summary.** The operation clock tracks start, end and duration, and ARNIE gives a spoken and on-screen summary of the case, including cautions raised and consults held.
+- **Wall board and room console.** The room device runs ARNIE and shows its state; the big-screen board shows the case, alerts, CT, operation clock, conversation and case log at a glance.
+- **Noise-resistant listening.** Agora AI noise suppression cleans the room microphone before speech recognition.
 
-Also built: a voice-led WHO checklist, counts and implants, and tourniquet timers (not part of the demo flow).
+Also built, outside the main flow: a voice-led WHO checklist, instrument counts and implant records, and tourniquet timers.
+
+**Principles:** quiet until it matters, deterministic safety decisions, and an assistant that assists and never decides. ARNIE does no dosing or diagnosis.
 
 ## How it works
 
