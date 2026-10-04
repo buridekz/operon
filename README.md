@@ -4,15 +4,11 @@
 
 > **No gloves off. No screens touched.** 🧤
 
-**Operon is a voice safety assistant for the operating room. It catches mistakes out loud, before they happen.** 🎙️
+**Every operating room deserves one more pair of hands. Operon gives it a voice.** 🎙️
 
-When the surgical team's hands are sterile and the room is short-staffed, one circulating nurse ends up typing timestamps, fetching scans and double-checking every drug. Operon gives the team **ARNIE** (Always Ready Nurse, In Emergencies), a voice agent that listens to the room so the humans can stay with the patient:
+Meet **ARNIE** (Always Ready Nurse, In Emergencies), the teammate who never scrubs out, never looks away and never touches a keyboard. ARNIE listens to the whole room, keeps the record, pulls up the scan and calls in the specialist, all by voice. And the moment someone reaches for the wrong drug or the wrong dose, ARNIE says so, out loud, before it reaches the patient.
 
-- 🛡️ **Speaks up when it matters:** hear "giving penicillin" for a patient with a penicillin allergy, or a dose that differs from the order, and ARNIE says so out loud and holds the entry.
-- 🗣️ **Does the screen work for you:** briefs the case, logs events after a spoken confirmation, opens and drives the CT scan, and calls a specialist into the room.
-- 📊 **Closes the loop:** ends the case with a spoken summary of the timeline, cautions and consults.
-
-Built on **Agora Conversational AI**, with every safety decision made by deterministic rules against the patient's chart. ARNIE assists and never decides: no dosing, no diagnosis.
+When the room is short-staffed and the team is sterile, Operon lets the surgeon keep operating and the nurse stay with the patient. Built on **Agora Conversational AI**. ARNIE assists. Humans decide.
 
 ## 😟 The problem
 
