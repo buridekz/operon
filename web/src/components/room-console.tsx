@@ -34,8 +34,8 @@ const GROUPS: { title: string; fields: Field[] }[] = [
     fields: [
       { name: "procedure", label: "Procedure", value: "Exploration and repair, left femoral artery", wide: true },
       { name: "site", label: "Surgical site", value: "left thigh" },
-      { name: "summary", label: "One-line summary", value: "58-year-old male, left femoral bleed", hint: "ARNIE reads this to a specialist you call in." },
-      { name: "specialists", label: "On-call specialists", value: "vascular: Dr. Valdez; orthopedics: Dr. Lim; anesthesia: Dr. Ramos", hint: "Specialty: name, separated by semicolons. Say “ARNIE, call vascular” or the doctor’s name.", wide: true },
+      { name: "summary", label: "One-line summary", value: "58-year-old male, left femoral bleed", hint: "ARNIE reads this to any specialist you call in." },
+      { name: "specialists", label: "On-call specialists", value: "vascular: Dr. Valdez; orthopedics: Dr. Lim; anesthesia: Dr. Ramos", hint: "One per specialty, as specialty: name, separated by semicolons. During the case, say “ARNIE, call vascular” or the doctor’s name.", wide: true, multiline: true },
     ],
   },
   {
@@ -45,7 +45,7 @@ const GROUPS: { title: string; fields: Field[] }[] = [
         name: "notes",
         label: "History",
         value: "Type 2 diabetes, on metformin. Hypertension, on amlodipine. Right knee arthroscopy in 2019. Non-smoker. No known anesthesia complications.",
-        hint: "Demo data. Anything written here, ARNIE can answer questions about (\u201cis the patient diabetic?\u201d). It says so when something isn\u2019t in the notes, and never gives a dose.",
+        hint: "ARNIE can answer questions from these notes (“is the patient diabetic?”). If something isn’t in the notes, it says so. It never gives a dose.",
         multiline: true,
       },
     ],
@@ -53,8 +53,8 @@ const GROUPS: { title: string; fields: Field[] }[] = [
   {
     title: "Safety",
     fields: [
-      { name: "allergies", label: "Allergies", value: "penicillin", hint: "Separate with commas. ARNIE speaks up when a drug, brand name or skin prep it hears conflicts." },
-      { name: "orders", label: "Ordered medications", value: "cefazolin 2 g", hint: "From the chart, separated by semicolons. ARNIE compares any dose it hears with these. It never suggests a dose." },
+      { name: "allergies", label: "Allergies", value: "penicillin", hint: "Separate with commas. ARNIE speaks up if the team names a drug, brand name or skin prep that conflicts with these." },
+      { name: "orders", label: "Ordered medications", value: "cefazolin 2 g", hint: "From the chart, separated by semicolons. ARNIE compares any dose it hears against these orders. It never suggests a dose." },
       { name: "potassium", label: "Pre-op potassium", value: "3.9" },
       { name: "hemoglobin", label: "Pre-op hemoglobin", value: "9.8" },
     ],
@@ -253,7 +253,7 @@ export function RoomConsole() {
       {step === "case" && (
         <form id="case" onSubmit={saveCase} className="mx-auto w-full max-w-2xl px-4 pb-32 pt-10 sm:px-6">
           <h1 className="text-[34px] font-semibold leading-tight tracking-[-0.02em]">New case</h1>
-          <p className="mt-1 text-[17px] text-label-2">Set this up before anyone scrubs. It&apos;s the only typing in the whole case.</p>
+          <p className="mt-1 text-[17px] text-label-2">Enter this before the team scrubs in. It&apos;s the only typing the case needs.</p>
           {GROUPS.map((g) => (
             <fieldset key={g.title} className="mt-8">
               <legend className="mb-2 px-4 text-[13px] text-label-2">{g.title}</legend>
