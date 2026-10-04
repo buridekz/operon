@@ -2,7 +2,17 @@
 
 ## 👋 Overview
 
-**A friendly voice safety assistant for the operating room**, built for the Agora Voice First track. Meet **ARNIE** (Always Ready Nurse, In Emergencies): the team just says "ARNIE, brief me", and ARNIE listens to the room, speaks up only when something conflicts with the patient's chart, and keeps everyone's hands off the screen. 🙌
+> **No gloves off. No screens touched.** 🧤
+
+**Operon is a voice safety assistant for the operating room. It catches mistakes out loud, before they happen.** 🎙️
+
+When the surgical team's hands are sterile and the room is short-staffed, one circulating nurse ends up typing timestamps, fetching scans and double-checking every drug. Operon gives the team **ARNIE** (Always Ready Nurse, In Emergencies), a voice agent that listens to the room so the humans can stay with the patient:
+
+- 🛡️ **Speaks up when it matters:** hear "giving penicillin" for a patient with a penicillin allergy, or a dose that differs from the order, and ARNIE says so out loud and holds the entry.
+- 🗣️ **Does the screen work for you:** briefs the case, logs events after a spoken confirmation, opens and drives the CT scan, and calls a specialist into the room.
+- 📊 **Closes the loop:** ends the case with a spoken summary of the timeline, cautions and consults.
+
+Built on **Agora Conversational AI**, with every safety decision made by deterministic rules against the patient's chart. ARNIE assists and never decides: no dosing, no diagnosis.
 
 ## 😟 The problem
 
