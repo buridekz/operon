@@ -1,14 +1,8 @@
 # 🩺 Operon
 
+## 👋 Overview
+
 **A friendly voice safety assistant for the operating room**, built for the Agora Voice First track. Meet **ARNIE** (Always Ready Nurse, In Emergencies): the team just says "ARNIE, brief me", and ARNIE listens to the room, speaks up only when something conflicts with the patient's chart, and keeps everyone's hands off the screen. 🙌
-
-## 🔗 Links
-
-- 🌐 **Web app:** https://operon-vega.vercel.app (`/room`, `/board`, `/specialist`, `/record`)
-- ⚙️ **Engine (Render, Singapore):** https://operon-engine.onrender.com (Agora calls its `/chat/completions`)
-- 💻 **Repository:** https://github.com/buridekz/operon
-- 😴 Heads-up: the engine is on a free tier and sleeps when idle. It takes about a minute to wake, so open the board a few minutes before a demo.
-- 🔁 Merges to `main` redeploy both automatically: the engine on Render (root `engine/`) and the web app on Vercel (root `web/`).
 
 ## 😟 The problem
 
@@ -44,6 +38,14 @@ Voice isn't a feature in Operon. It is the whole experience.
 - 🔇 **Agora AI noise suppression** (AI denoiser extension) cleans the room audio.
 - 🧠 **Agora Conversational AI Engine** handles speech recognition, turn detection and ARNIE's voice. Each heard line is sent to our own `/chat/completions` endpoint, so our safety rules always see the words first.
 - 🙋 ARNIE is set not to be interrupted, so a safety warning is always heard in full.
+
+## 🔗 Links
+
+- 🌐 **Web app:** https://operon-vega.vercel.app (`/room`, `/board`, `/specialist`, `/record`)
+- ⚙️ **Engine (Render, Singapore):** https://operon-engine.onrender.com (Agora calls its `/chat/completions`)
+- 💻 **Repository:** https://github.com/buridekz/operon
+- 😴 Heads-up: the engine is on a free tier and sleeps when idle. It takes about a minute to wake, so open the board a few minutes before a demo.
+- 🔁 Merges to `main` redeploy both automatically: the engine on Render (root `engine/`) and the web app on Vercel (root `web/`).
 
 ## 🔧 How it works
 
